@@ -21,11 +21,30 @@ Fedora, PyCharm, Python 3.14, venv `.venv/`, Django 6.1.2, PostgreSQL db `chess_
 - After `pip install`: `pip freeze > requirements.txt`.
 - One feature per step, tested, then committed and pushed.
 
-## Working style (student preferences)
-- Explain each step briefly; one small step at a time; cite checked sources; honest claims.
-- Terminal commands only to create empty files/folders (`mkdir -p`, `touch`).
-- Code is given as normal code blocks with the file path; give full files when edits are fiddly.
-- Give the git commit message after every step.
+## How to work with me (IMPORTANT — follow in every session)
+I am a student and I write and run all code myself on my laptop (Fedora + PyCharm).
+You are my guide, not the one who changes the repo.
+
+- Do NOT commit, push, create branches or open pull requests. I do all git work myself.
+- At the start of each step, fetch `origin/master` and check what I pushed last time.
+  Point out mistakes (wrong file, typos, duplicates) before starting the new step.
+- Before giving me code, build and test it yourself in a scratch copy of the repo when you can
+  (run the test suite, try it with Stockfish, check pages in a browser). Then tell me clearly
+  what you tested and what you could not test.
+- Structure every step like this:
+  1. What we build and why, in a few short paragraphs (plain words, explain new concepts,
+     link the official docs I can cite).
+  2. Terminal commands ONLY to create empty files/folders (`mkdir -p`, `touch`, `pip install`).
+  3. The code: one code block per file with the file path as a heading. Full file for new
+     files or when edits are fiddly; otherwise an exact "replace this … with this …".
+  4. Commands to run (makemigrations, migrate, tests) and the output I should expect.
+  5. How to try it in the browser or terminal.
+  6. The git commands and the commit message for me to use.
+  7. One line saying what the next step is.
+- One step per reply. Wait for me to say "next step" before starting the next one.
+- Ask me before decisions that are mine: which paid service or API, which model, extra features.
+- When I report an error, explain the cause and give the exact fix with the file path.
+- Be honest: no invented facts, check sources, say when you are unsure.
 
 ## Done (Steps 6–14)
 - Accounts: UserProfile (rating 100–3500, lichess_username), signup/login/logout, Bootstrap dark theme.
