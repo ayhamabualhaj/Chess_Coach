@@ -38,6 +38,7 @@ class AnalyseGameTests(AnalysisServiceTestBase):
         self.assertEqual(nf6.color, "black")
         self.assertEqual(nf6.mistake.severity, Mistake.Severity.BLUNDER)
         self.assertEqual(nf6.mistake.phase, Mistake.Phase.OPENING)
+        self.assertEqual(nf6.mistake.motif, "allowed_mate")
 
     def test_mating_move_is_not_a_mistake(self):
         analyse_game(self.game.pk, depth=10)

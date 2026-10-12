@@ -6,6 +6,7 @@ from django.conf import settings
 
 from ai.engine import EngineNotFoundError, Score, StockfishEngine, centipawn_loss, classify_move, game_phase
 from ai.engine.stockfish_wrapper import MATE_SCORE
+from ai.tools import engine_mate_motif, primary_motif
 from apps.games.models import Game
 from apps.games.repositories import analysis_repository, game_repository
 
@@ -87,7 +88,16 @@ def _evaluate_moves(parsed_game, depth: int) -> tuple[list[dict], list[dict]]:
                 "cp_loss": cp_loss,
             })
             if label:
-                mistake_rows.append({"ply": ply, "severity": label, "phase": phase})
+                best_uci = before.best_move.uci() if before.best_move else ""
+                mistake_rows.append({
+                    "ply": ply,
+                    "severity": label,
+                    "phase": phase,
+                    "motif": (
+                            primary_motif(fen_before, move.uci(), best_uci)
+                            or engine_mate_motif(before.mate, after.mate, mover_is_white)
+                    ),
+                })
 
             if after is None:
                 break

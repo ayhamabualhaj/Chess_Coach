@@ -15,6 +15,11 @@ def replace_analysis(game, move_rows: list[dict], mistake_rows: list[dict]) -> N
 
     move_by_ply = {move.ply: move for move in moves}
     Mistake.objects.bulk_create(
-        Mistake(move=move_by_ply[row["ply"]], severity=row["severity"], phase=row["phase"])
+        Mistake(
+            move=move_by_ply[row["ply"]],
+            severity=row["severity"],
+            phase=row["phase"],
+            motif=row.get("motif", ""),
+        )
         for row in mistake_rows
     )
