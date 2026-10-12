@@ -12,7 +12,6 @@ def upload_game(request):
         try:
             import_pgn(request.user, pgn)
         except InvalidPGNError as e:
-            messages.error(request, str(e))
             return render(request, "games/upload.html", {"error": str(e), "pgn": pgn})
         messages.success(request, "Game uploaded successfully.")
         return redirect("game_list")

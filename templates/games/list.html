@@ -12,7 +12,14 @@
   <div class="list-group shadow-sm">
     {% for game in games %}
       <div class="list-group-item d-flex justify-content-between">
-        <span>Game #{{ game.pk }}</span>
+        <span>
+          {% if game.white or game.black %}
+            {{ game.white|default:"?" }} vs {{ game.black|default:"?" }}
+          {% else %}
+            Game #{{ game.pk }}
+          {% endif %}
+          {% if game.result %}<span class="badge text-bg-secondary ms-2">{{ game.result }}</span>{% endif %}
+        </span>
         <small class="text-body-secondary">{{ game.created_at|date:"j M Y, H:i" }}</small>
       </div>
     {% endfor %}
