@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django_tasks_db',
     'apps.accounts',
     'apps.games',
     'apps.coaching',
@@ -154,3 +155,18 @@ STOCKFISH_PATH = os.getenv("STOCKFISH_PATH", "/usr/bin/stockfish")
 
 # Search depth per position: higher is stronger but slower.
 STOCKFISH_DEPTH = int(os.getenv("STOCKFISH_DEPTH", "12"))
+
+# Background tasks (Django's built-in Tasks framework).
+# Tasks are stored in PostgreSQL and run by: python manage.py db_worker
+TASKS = {
+    "default": {
+        "BACKEND": "django_tasks_db.DatabaseBackend",
+        "QUEUES": ["default"],
+    }
+}
+
+
+
+
+
+

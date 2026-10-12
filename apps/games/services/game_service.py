@@ -1,5 +1,9 @@
 import chess
+import chess
 
+from apps.games.models import Game, Mistake
+from apps.games.repositories import game_repository
+from apps.games.tasks import analyse_game_task
 from apps.games.models import Mistake
 from apps.games.repositories import game_repository
 
@@ -14,6 +18,13 @@ def list_games(user):
 def get_game(user, game_id: int):
     return game_repository.get_game_for_user(user, game_id)
 
+def request_analysis(game: Game) -> bool:
+    """Put the game in the background queue. Returns False if it is already queued or running."""
+    if game.status in (Game.Status.QUEUED, Game.Status.RUNNING):
+        return False
+    game_repository.set_status(game, Game.Status.QUEUED)
+    analyse_game_task.enqueue(game.pk)
+    return True
 
 def get_game_detail(user, game_id: int) -> dict | None:
     """Everything the game page needs, or None if the user has no such game."""
@@ -24,6 +35,7 @@ def get_game_detail(user, game_id: int) -> dict | None:
     moves = list(game_repository.list_moves_with_mistakes(game))
     return {
         "game": game,
+        "in_progress": game.status in (Game.Status.QUEUED, Game.Status.RUNNING),
         "rows": _move_rows(moves),
         "stats": {"white": _side_stats(moves, "white"), "black": _side_stats(moves, "black")},
         "chart": _chart_data(moves),

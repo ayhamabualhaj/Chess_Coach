@@ -1,11 +1,10 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.http import Http404
+from django.http import Http404, JsonResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_POST
 
 from apps.games.services import game_service
-from apps.games.services.analysis_service import AnalysisError, analyse_game
 from apps.games.services.pgn_import_service import InvalidPGNError, import_pgn
 
 
@@ -42,12 +41,17 @@ def analyse(request, game_id):
     game = game_service.get_game(request.user, game_id)
     if game is None:
         raise Http404("Game not found")
-    try:
-        summary = analyse_game(game.pk)
-    except AnalysisError as e:
-        messages.error(request, str(e))
+    if game_service.request_analysis(game):
+        messages.info(request, "Analysis started. This page will update when it is finished.")
     else:
-        messages.success(
-            request, f"Analysed {summary['moves']} moves and found {summary['mistakes']} mistakes."
-        )
+        messages.warning(request, "This game is already being analysed.")
     return redirect("game_detail", game_id=game.pk)
+
+
+@login_required
+def game_status(request, game_id):
+    # Small JSON endpoint the game page polls while an analysis is running.
+    game = game_service.get_game(request.user, game_id)
+    if game is None:
+        raise Http404("Game not found")
+    return JsonResponse({"status": game.status, "label": game.get_status_display()})

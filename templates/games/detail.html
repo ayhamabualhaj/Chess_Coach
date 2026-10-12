@@ -14,17 +14,32 @@
   </div>
   <form method="post" action="{% url 'analyse_game' game.pk %}">
     {% csrf_token %}
-    <button type="submit" class="btn btn-primary">
+    <button type="submit" class="btn btn-primary" {% if in_progress %}disabled{% endif %}>
       {% if game.status == "done" %}Analyse again{% else %}Analyse with Stockfish{% endif %}
     </button>
   </form>
 </div>
 
-{% if not rows %}
+{% if in_progress %}
+  <div class="alert alert-info d-flex align-items-center gap-3" id="analysis-progress"
+       data-status-url="{% url 'game_status' game.pk %}">
+    <div class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></div>
+    <div>
+      <strong>{{ game.get_status_display }}…</strong> Stockfish is working through the game. This page refreshes by itself.
+      <div class="small">Nothing happening? Make sure the worker is running: <code>python manage.py db_worker</code></div>
+    </div>
+  </div>
+{% elif game.status == "failed" %}
+  <div class="alert alert-danger">
+    <strong>Analysis failed.</strong> {{ game.analysis_error|default:"Please try again." }}
+  </div>
+{% endif %}
+
+{% if not rows and not in_progress %}
   <div class="text-center text-body-secondary py-5 border rounded">
     This game has not been analysed yet. Click <strong>Analyse with Stockfish</strong> to start.
   </div>
-{% else %}
+{% elif rows %}
   <div class="row g-3 mb-4">
     {% for side, s in stats.items %}
       <div class="col-md-6">
@@ -34,7 +49,7 @@
               {% if side == "white" %}White · {{ game.white|default:"?" }}{% else %}Black · {{ game.black|default:"?" }}{% endif %}
             </h2>
             <div class="d-flex flex-wrap gap-4">
-              <div><div class="fs-4 fw-semibold">{{ s.avg_cp_loss|default:"–" }}</div><div class="small text-body-secondary">avg. centipawn loss</div></div>
+              <div><div class="fs-4 fw-semibold">{{ s.avg_cp_loss|default_if_none:"–" }}</div><div class="small text-body-secondary">avg. centipawn loss</div></div>
               <div><div class="fs-4 fw-semibold text-warning-emphasis">{{ s.inaccuracy }}</div><div class="small text-body-secondary">inaccuracies</div></div>
               <div><div class="fs-4 fw-semibold text-warning">{{ s.mistake }}</div><div class="small text-body-secondary">mistakes</div></div>
               <div><div class="fs-4 fw-semibold text-danger">{{ s.blunder }}</div><div class="small text-body-secondary">blunders</div></div>
@@ -76,6 +91,20 @@
 {% endblock %}
 
 {% block scripts %}
+{% if in_progress %}
+<script>
+  // Ask the server every 2 seconds whether the analysis has finished, then reload.
+  const box = document.getElementById("analysis-progress");
+  const timer = setInterval(async () => {
+    const response = await fetch(box.dataset.statusUrl);
+    const { status } = await response.json();
+    if (status !== "queued" && status !== "running") {
+      clearInterval(timer);
+      window.location.reload();
+    }
+  }, 2000);
+</script>
+{% endif %}
 {% if rows %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
 <script>

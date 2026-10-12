@@ -7,6 +7,9 @@ from apps.games.services import game_service
 from tests.test_analysis_service import BLUNDER_GAME
 from tests.test_stockfish_wrapper import HAS_STOCKFISH, STOCKFISH_PATH
 
+IMMEDIATE_TASKS = {"default": {"BACKEND": "django.tasks.backends.immediate.ImmediateBackend"}}
+DUMMY_TASKS = {"default": {"BACKEND": "django.tasks.backends.dummy.DummyBackend"}}
+
 START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 AFTER_E4_FEN = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1"
 
@@ -65,6 +68,11 @@ class GameDetailServiceTests(GamePageTestBase):
         self.assertEqual((row["number"], row["white"]["san"], row["black"]["san"]), (1, "e4", "f6"))
         self.assertEqual(row["black"]["best_san"], "e5")
 
+    def test_zero_centipawn_loss_is_shown_as_zero(self):
+        self.add_analysed_moves()
+        response = self.client.get(reverse("game_detail", args=[self.game.pk]))
+        self.assertContains(response, '<div class="fs-4 fw-semibold">0</div>', html=False)
+
     def test_stats_per_side(self):
         self.add_analysed_moves()
         stats = game_service.get_game_detail(self.user, self.game.pk)["stats"]
@@ -98,16 +106,45 @@ class AnalyseViewTests(GamePageTestBase):
         response = self.client.post(reverse("analyse_game", args=[self.game.pk]))
         self.assertEqual(response.status_code, 404)
 
-    @override_settings(STOCKFISH_PATH="/no/such/stockfish")
-    def test_missing_engine_shows_error_message(self):
+    @override_settings(TASKS=DUMMY_TASKS)
+    def test_button_queues_analysis_and_page_shows_progress(self):
         response = self.client.post(reverse("analyse_game", args=[self.game.pk]), follow=True)
+        self.game.refresh_from_db()
+        self.assertEqual(self.game.status, Game.Status.QUEUED)
+        self.assertContains(response, "Analysis started")
+        self.assertContains(response, 'id="analysis-progress"')
+
+    @override_settings(TASKS=DUMMY_TASKS)
+    def test_second_click_does_not_queue_twice(self):
+        self.client.post(reverse("analyse_game", args=[self.game.pk]))
+        response = self.client.post(reverse("analyse_game", args=[self.game.pk]), follow=True)
+        self.assertContains(response, "already being analysed")
+
+    @override_settings(TASKS=IMMEDIATE_TASKS, STOCKFISH_PATH="/no/such/stockfish")
+    def test_failed_analysis_shows_reason(self):
+        response = self.client.post(reverse("analyse_game", args=[self.game.pk]), follow=True)
+        self.game.refresh_from_db()
+        self.assertEqual(self.game.status, Game.Status.FAILED)
         self.assertContains(response, "chess engine is not available")
 
-    @override_settings(STOCKFISH_PATH=STOCKFISH_PATH, STOCKFISH_DEPTH=8)
-    def test_analyse_button_runs_analysis(self):
+    @override_settings(TASKS=IMMEDIATE_TASKS, STOCKFISH_PATH=STOCKFISH_PATH, STOCKFISH_DEPTH=8)
+    def test_analysis_runs_and_results_appear(self):
         if not HAS_STOCKFISH:
             self.skipTest("Stockfish not installed")
         response = self.client.post(reverse("analyse_game", args=[self.game.pk]), follow=True)
         self.assertRedirects(response, reverse("game_detail", args=[self.game.pk]))
-        self.assertContains(response, "Analysed 7 moves")
+        self.game.refresh_from_db()
+        self.assertEqual(self.game.status, Game.Status.DONE)
         self.assertContains(response, "Blunder")
+
+
+class GameStatusEndpointTests(GamePageTestBase):
+    def test_returns_status_as_json(self):
+        response = self.client.get(reverse("game_status", args=[self.game.pk]))
+        self.assertEqual(response.json(), {"status": "pending", "label": "Not analysed yet"})
+
+    def test_other_users_get_404(self):
+        User.objects.create_user("intruder", password="pass12345")
+        self.client.login(username="intruder", password="pass12345")
+        response = self.client.get(reverse("game_status", args=[self.game.pk]))
+        self.assertEqual(response.status_code, 404)

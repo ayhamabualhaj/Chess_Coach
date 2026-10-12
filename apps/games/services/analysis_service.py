@@ -28,18 +28,20 @@ def analyse_game(game_id: int, depth: int | None = None) -> dict:
     game = game_repository.get_game(game_id)
     parsed = chess.pgn.read_game(io.StringIO(game.pgn))
     if parsed is None:
-        game_repository.set_status(game, Game.Status.FAILED)
-        raise AnalysisError("The stored PGN could not be read.")
+        message = "The stored PGN could not be read."
+        game_repository.set_status(game, Game.Status.FAILED, message)
+        raise AnalysisError(message)
 
     game_repository.set_status(game, Game.Status.RUNNING)
     try:
         move_rows, mistake_rows = _evaluate_moves(parsed, depth or settings.STOCKFISH_DEPTH)
         analysis_repository.replace_analysis(game, move_rows, mistake_rows)
     except EngineNotFoundError as e:
-        game_repository.set_status(game, Game.Status.FAILED)
-        raise AnalysisError("The chess engine is not available. Check STOCKFISH_PATH.") from e
+        message = "The chess engine is not available. Check STOCKFISH_PATH."
+        game_repository.set_status(game, Game.Status.FAILED, message)
+        raise AnalysisError(message) from e
     except Exception:
-        game_repository.set_status(game, Game.Status.FAILED)
+        game_repository.set_status(game, Game.Status.FAILED, "Unexpected error during analysis.")
         raise
 
     game_repository.set_status(game, Game.Status.DONE)

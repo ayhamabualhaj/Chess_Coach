@@ -23,6 +23,7 @@ def list_moves_with_mistakes(game: Game):
     return game.moves.select_related("mistake").order_by("ply")
 
 
-def set_status(game: Game, status: str) -> None:
+def set_status(game: Game, status: str, error: str = "") -> None:
     game.status = status
-    game.save(update_fields=["status"])
+    game.analysis_error = error[:200]
+    game.save(update_fields=["status", "analysis_error"])
