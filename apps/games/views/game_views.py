@@ -1,7 +1,7 @@
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
 
-from apps.games.repositories import game_repository
+from apps.games.services import game_service
 from apps.games.services.pgn_import_service import InvalidPGNError, import_pgn
 
 
@@ -19,5 +19,5 @@ def upload_game(request):
 
 @login_required
 def game_list(request):
-    games = game_repository.list_games_for_user(request.user)
+    games = game_service.list_games(request.user)
     return render(request, "games/list.html", {"games": games})
