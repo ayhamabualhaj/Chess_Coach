@@ -148,3 +148,6 @@ LOGOUT_REDIRECT_URL = "login"
 # Messages
 # Bootstrap calls its red alert "danger", Django calls the level "error".
 MESSAGE_TAGS = {message_constants.ERROR: "danger"}
+
+# Chess engine
+STOCKFISH_PATH = os.getenv("STOCKFISH_PATH", "/usr/bin/stockfish")
