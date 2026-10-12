@@ -1,0 +1,16 @@
+/* Django renders form fields without Bootstrap classes, so style them here. */
+.form-stack p { margin-bottom: 1rem; }
+.form-stack label { display: block; font-weight: 500; margin-bottom: 0.25rem; }
+.form-stack input:not([type="checkbox"]),
+.form-stack textarea {
+  display: block;
+  width: 100%;
+  padding: 0.375rem 0.75rem;
+  border: 1px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius);
+}
+.form-stack .helptext { font-size: 0.875rem; color: var(--bs-secondary-color); }
+.form-stack .helptext ul { margin: 0.25rem 0 0; padding-left: 1.25rem; }
+.errorlist { color: var(--bs-danger); list-style: none; padding-left: 0; margin-bottom: 0.25rem; }
+
+.pgn-input { font-family: var(--bs-font-monospace); font-size: 0.875rem; }

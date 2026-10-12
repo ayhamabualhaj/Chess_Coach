@@ -1,16 +1,26 @@
-<p>
-  Logged in as {{ user.username }}
-  <form method="post" action="{% url 'logout' %}" style="display:inline">
-    {% csrf_token %}
-    <button type="submit">Log out</button>
-  </form>
-</p>
-<h1>My games</h1>
-<a href="{% url 'upload_game' %}">Upload a game</a>
-<ul>
-  {% for game in games %}
-    <li>Game {{ game.pk }} — {{ game.created_at }}</li>
-  {% empty %}
-    <li>No games yet.</li>
-  {% endfor %}
-</ul>
+{% extends "base.html" %}
+
+{% block title %}My games{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h3 mb-0">My games</h1>
+  <a href="{% url 'upload_game' %}" class="btn btn-primary">Upload a game</a>
+</div>
+
+{% if games %}
+  <div class="list-group shadow-sm">
+    {% for game in games %}
+      <div class="list-group-item d-flex justify-content-between">
+        <span>Game #{{ game.pk }}</span>
+        <small class="text-body-secondary">{{ game.created_at|date:"j M Y, H:i" }}</small>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="text-center text-body-secondary py-5 border rounded">
+    <p class="mb-2">You haven't uploaded any games yet.</p>
+    <a href="{% url 'upload_game' %}">Upload your first game</a>
+  </div>
+{% endif %}
+{% endblock %}

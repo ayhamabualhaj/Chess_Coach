@@ -14,7 +14,7 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
-
+from django.contrib.messages import constants as message_constants
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -129,7 +129,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
 STATIC_URL = 'static/'
-
+STATICFILES_DIRS = [BASE_DIR / "static"]
 
 # Email
 # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
@@ -144,3 +144,7 @@ MAILERS = {
 LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "game_list"
 LOGOUT_REDIRECT_URL = "login"
+
+# Messages
+# Bootstrap calls its red alert "danger", Django calls the level "error".
+MESSAGE_TAGS = {message_constants.ERROR: "danger"}
