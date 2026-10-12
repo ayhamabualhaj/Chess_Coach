@@ -1,0 +1,8 @@
+<h1>Upload a game</h1>
+{% if error %}<p style="color:red">{{ error }}</p>{% endif %}
+<form method="post">
+  {% csrf_token %}
+  <textarea name="pgn" rows="15" cols="80">{{ pgn }}</textarea><br>
+  <button type="submit">Upload</button>
+</form>
+<a href="{% url 'game_list' %}">My games</a>

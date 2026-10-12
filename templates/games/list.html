@@ -1,0 +1,9 @@
+<h1>My games</h1>
+<a href="{% url 'upload_game' %}">Upload a game</a>
+<ul>
+  {% for game in games %}
+    <li>Game {{ game.pk }} — {{ game.created_at }}</li>
+  {% empty %}
+    <li>No games yet.</li>
+  {% endfor %}
+</ul>
