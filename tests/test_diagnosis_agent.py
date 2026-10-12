@@ -30,18 +30,8 @@ WEAKNESS = {
     "exercises": ["Solve 10 'hanging piece' puzzles a day.", "Replay your two blunders."],
 }
 
-PLAN = {
-    "overview": "One week focused on piece safety.",
-    "days": 7,
-    "tasks": [
-        {"day": 3, "focus": "Piece safety", "activity": "Play 3 rapid games, blunder-check every move.", "minutes": 45},
-        {"day": 1, "focus": "Piece safety", "activity": "Hanging-piece puzzles.", "minutes": 20},
-    ],
-}
-
-
-def submission(weaknesses=None, plan=None, summary="Solid, but drops pieces."):
-    return {"summary": summary, "weaknesses": weaknesses or [WEAKNESS], "training_plan": plan or PLAN}
+def submission(weaknesses=None, summary="Solid, but drops pieces."):
+    return {"summary": summary, "weaknesses": weaknesses or [WEAKNESS]}
 
 
 def tool_use(block_id, name, tool_input):
@@ -106,24 +96,6 @@ class DiagnosisAgentTests(unittest.TestCase):
         DiagnosisAgent(client=client).run(RECORDS)
         worst = json.loads(tool_results(client.requests[1])[0]["content"])
         self.assertEqual(worst[0]["best_move"], "d4")  # not "d2d4"
-
-    def test_training_plan_is_returned_sorted_by_day(self):
-        client = FakeClient([response(tool_use("t1", "submit_diagnosis", submission()))])
-        result = DiagnosisAgent(client=client).run(RECORDS)
-        self.assertEqual(result.training_plan["days"], 7)
-        self.assertEqual([t["day"] for t in result.training_plan["tasks"]], [1, 3])
-
-    def test_task_outside_the_plan_is_rejected_and_model_retries(self):
-        bad_plan = {**PLAN, "days": 2, "tasks": [{**PLAN["tasks"][0], "day": 5}]}
-        client = FakeClient([
-            response(tool_use("t1", "submit_diagnosis", submission(plan=bad_plan))),
-            response(tool_use("t2", "submit_diagnosis", submission())),
-        ])
-        result = DiagnosisAgent(client=client).run(RECORDS)
-        error = tool_results(client.requests[1])[0]
-        self.assertTrue(error["is_error"])
-        self.assertIn("between 1 and 2", error["content"])
-        self.assertEqual(result.training_plan["days"], 7)
 
     def test_invented_game_id_is_rejected_and_model_retries(self):
         bad = {**WEAKNESS, "example_game_ids": [99]}

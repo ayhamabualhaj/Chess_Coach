@@ -1,13 +1,14 @@
 """Diagnosis agent: finds a player's recurring weaknesses with Claude and tool use,
-and writes how to fix them plus a training plan.
+and explains how to fix each one.
 
 The agent is a loop, not a single API call. Claude gets a short description
 of the player and a set of tools over their analysed moves (the functions in
 ai/tools). It decides which statistics to look at, asks for concrete example
 positions, and finishes by calling `submit_diagnosis` with a structured list
-of weaknesses (each with how to improve and exercises) and a training plan.
-Every weakness must cite games that really exist in the data and the plan must
-be valid; if not, the tool returns an error and Claude has to fix it.
+of weaknesses, each with how to improve and exercises. Every weakness must cite
+games that really exist in the data; if not, the tool returns an error and
+Claude has to fix it. (The puzzle practice list is built by code from the
+mistakes themselves, see ai/tools/practice_tools.py.)
 
 Pure Python, no Django: the caller passes in MoveRecord objects and,
 optionally, an Anthropic client (tests pass a fake one).
@@ -29,7 +30,6 @@ from ai.tools.stats_tools import PHASES, MoveRecord, opening_breakdown, summariz
 DEFAULT_MODEL = "claude-opus-5-5"
 MAX_TURNS = 8
 MAX_WORST_MOVES = 10
-MAX_PLAN_DAYS = 14
 
 CATEGORIES = ("tactics", "opening", "middlegame", "endgame", "time_or_focus", "other")
 MOTIFS = (
@@ -53,9 +53,9 @@ invent moves, games or statistics.
 
 For each weakness, also give the cure:
 - how_to_improve: what to change in the player's thinking or habits, concretely.
-- exercises: 2-3 practical exercises the player can do away from the board or online.
-Then write a training plan that works on the weaknesses in priority order. Match the difficulty \
-to the player's rating when it is given.
+- exercises: 2-3 practical exercises or habits. The app already links puzzle sets for each \
+mistake type, so focus on other practice (reviewing own games, thinking routines, slower games). \
+Match the advice to the player's rating when it is given.
 
 Write for the player: clear, encouraging, no jargon without explanation.
 When you are done, call submit_diagnosis exactly once. Do not write the diagnosis as plain text."""
@@ -123,7 +123,7 @@ TOOLS = [
     },
     {
         "name": "submit_diagnosis",
-        "description": "Submit the final diagnosis and training plan. Call this once, at the end.",
+        "description": "Submit the final diagnosis. Call this once, at the end.",
         "strict": True,
         "input_schema": {
             "type": "object",
@@ -155,32 +155,8 @@ TOOLS = [
                         "additionalProperties": False,
                     },
                 },
-                "training_plan": {
-                    "type": "object",
-                    "properties": {
-                        "overview": {"type": "string", "description": "1-3 sentences: the idea of the plan."},
-                        "days": {"type": "integer", "description": f"Length of the plan, 1 to {MAX_PLAN_DAYS}."},
-                        "tasks": {
-                            "type": "array",
-                            "description": "One or more tasks per day.",
-                            "items": {
-                                "type": "object",
-                                "properties": {
-                                    "day": {"type": "integer"},
-                                    "focus": {"type": "string", "description": "Which weakness this works on."},
-                                    "activity": {"type": "string", "description": "What to do, concretely."},
-                                    "minutes": {"type": "integer"},
-                                },
-                                "required": ["day", "focus", "activity", "minutes"],
-                                "additionalProperties": False,
-                            },
-                        },
-                    },
-                    "required": ["overview", "days", "tasks"],
-                    "additionalProperties": False,
-                },
             },
-            "required": ["summary", "weaknesses", "training_plan"],
+            "required": ["summary", "weaknesses"],
             "additionalProperties": False,
         },
     },
@@ -207,8 +183,6 @@ class DiagnosisResult:
     weaknesses: list[dict]
     model: str
     turns: int
-    # {"overview": str, "days": int, "tasks": [{"day", "focus", "activity", "minutes"}]}
-    training_plan: dict = field(default_factory=dict)
     tool_calls: list[ToolCall] = field(default_factory=list)
     input_tokens: int = 0
     output_tokens: int = 0
@@ -241,8 +215,8 @@ class _Toolbox:
                 raise ValueError(f"Invalid position or move: {exc}") from exc
         raise ValueError(f"Unknown tool: {name}")
 
-    def check_diagnosis(self, args: dict) -> tuple[list[dict], dict]:
-        """Validates submit_diagnosis input; returns the cleaned weaknesses and training plan."""
+    def check_diagnosis(self, args: dict) -> list[dict]:
+        """Validates submit_diagnosis input and returns the cleaned weaknesses."""
         weaknesses = args.get("weaknesses") or []
         if not args.get("summary") or not weaknesses:
             raise ValueError("Give a summary and at least one weakness.")
@@ -259,23 +233,12 @@ class _Toolbox:
             if not weakness.get("how_to_improve") or not weakness.get("exercises"):
                 raise ValueError(f"Weakness '{weakness.get('title')}' needs how_to_improve and exercises.")
             cleaned.append({**weakness, "priority": min(max(1, int(weakness.get("priority", 2))), 3)})
-
-        plan = args.get("training_plan") or {}
-        days = int(plan.get("days", 0))
-        tasks = plan.get("tasks") or []
-        if not plan.get("overview") or not tasks or not 1 <= days <= MAX_PLAN_DAYS:
-            raise ValueError(
-                f"The training plan needs an overview, 1 to {MAX_PLAN_DAYS} days and at least one task."
-            )
-        if any(not 1 <= int(task.get("day", 0)) <= days for task in tasks):
-            raise ValueError(f"Every task's day must be between 1 and {days}.")
-        plan = {**plan, "tasks": sorted(tasks, key=lambda task: int(task["day"]))}
-        return sorted(cleaned, key=lambda w: w["priority"]), plan
+        return sorted(cleaned, key=lambda w: w["priority"])
 
 
 def _player_prompt(records: list[MoveRecord], player: dict | None) -> str:
     player = player or {}
-    lines = ["Diagnose this player's recurring weaknesses and write a training plan to fix them."]
+    lines = ["Diagnose this player's recurring weaknesses and explain how to fix them."]
     if player.get("name"):
         lines.append(f"Player: {player['name']}")
     if player.get("rating"):
@@ -357,11 +320,10 @@ class DiagnosisAgent:
                 is_error = False
                 try:
                     if block.name == "submit_diagnosis":
-                        weaknesses, plan = toolbox.check_diagnosis(block.input)
+                        weaknesses = toolbox.check_diagnosis(block.input)
                         result.tool_calls.append(ToolCall(block.name, block.input, time.perf_counter() - tool_started))
                         result.summary = block.input["summary"]
                         result.weaknesses = weaknesses
-                        result.training_plan = plan
                         result.seconds = time.perf_counter() - started
                         return result
                     content = json.dumps(toolbox.run(block.name, block.input))

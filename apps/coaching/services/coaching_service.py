@@ -41,6 +41,14 @@ def request_report(user, game_ids) -> WeaknessReport:
     generate_report_task.enqueue(report.pk)
     return report
 
+def set_practice_done(user, report_id: int, index: int, done: bool) -> bool:
+    """Tick a practice item on or off. Returns False if there is no such item."""
+    report = report_repository.get_report_for_user(user, report_id)
+    plan = report_repository.get_training_plan(report) if report else None
+    if plan is None or not 0 <= index < len(plan.tasks):
+        return False
+    report_repository.set_task_done(plan, index, done)
+    return True
 
 def get_report(user, report_id: int) -> WeaknessReport | None:
     return report_repository.get_report_for_user(user, report_id)

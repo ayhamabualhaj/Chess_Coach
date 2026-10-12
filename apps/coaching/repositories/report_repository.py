@@ -44,12 +44,15 @@ def save_result(report: WeaknessReport, **fields) -> None:
     report.save()
 
 
-def save_training_plan(report: WeaknessReport, overview: str, days: int, tasks: list) -> TrainingPlan:
-    plan, _ = TrainingPlan.objects.update_or_create(
-        report=report, defaults={"overview": overview, "days": days, "tasks": tasks}
-    )
+def save_training_plan(report: WeaknessReport, tasks: list) -> TrainingPlan:
+    plan, _ = TrainingPlan.objects.update_or_create(report=report, defaults={"tasks": tasks})
     return plan
 
 
 def get_training_plan(report: WeaknessReport) -> TrainingPlan | None:
     return TrainingPlan.objects.filter(report=report).first()
+
+
+def set_task_done(plan: TrainingPlan, index: int, done: bool) -> None:
+    plan.tasks[index]["done"] = done
+    plan.save(update_fields=["tasks"])

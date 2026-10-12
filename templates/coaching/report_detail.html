@@ -79,29 +79,41 @@
     </div>
   {% endfor %}
 
-  {% if plan %}
-    <h2 class="h5 mt-4 mb-3">Your {{ plan.days }}-day training plan</h2>
-    <div class="card shadow-sm mb-4">
-      <div class="card-body">
-        <p>{{ plan.overview }}</p>
-        <div class="table-responsive">
-          <table class="table table-sm align-middle mb-0">
-            <thead>
-              <tr><th>Day</th><th>Focus</th><th>What to do</th><th class="text-end">Minutes</th></tr>
-            </thead>
-            <tbody>
-              {% for task in plan.tasks %}
-                <tr>
-                  <td>{{ task.day }}</td>
-                  <td>{{ task.focus }}</td>
-                  <td>{{ task.activity }}</td>
-                  <td class="text-end">{{ task.minutes }}</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </div>
+  {% if plan and plan.total_puzzles %}
+    <h2 class="h5 mt-4 mb-1" id="practice">Practice: puzzles for your mistakes</h2>
+    <p class="text-body-secondary small">
+      For every mistake type you made, 3 puzzles per mistake on Lichess (free, no account needed).
+      Tick a set when you have done it. {{ plan.done_count }} of {{ plan.tasks|length }} done.
+    </p>
+    <div class="progress mb-3" role="progressbar" aria-label="Practice progress"
+         aria-valuenow="{{ plan.done_count }}" aria-valuemin="0" aria-valuemax="{{ plan.tasks|length }}">
+      <div class="progress-bar bg-success" style="width: {% widthratio plan.done_count plan.tasks|length 100 %}%"></div>
+    </div>
+    <div class="list-group shadow-sm mb-4">
+      {% for task in plan.tasks %}
+        {% if task.url %}
+          <div class="list-group-item d-flex gap-3 align-items-start {% if task.done %}practice-done{% endif %}">
+            <form method="post" action="{% url 'toggle_practice' report.pk forloop.counter0 %}" class="pt-1">
+              {% csrf_token %}
+              <input type="hidden" name="done" value="{% if task.done %}0{% else %}1{% endif %}">
+              <input class="form-check-input" type="checkbox" {% if task.done %}checked{% endif %}
+                     onchange="this.form.submit()" aria-label="Mark {{ task.name }} as done">
+            </form>
+            <div class="flex-grow-1">
+              <div class="d-flex flex-wrap align-items-center gap-2">
+                <strong class="practice-name">{{ task.puzzles }} × {{ task.name }} puzzles</strong>
+                <a href="{{ task.url }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-success">Open on Lichess ↗</a>
+              </div>
+              <div class="small text-body-secondary mt-1">
+                You made {{ task.mistakes }} mistake{{ task.mistakes|pluralize }} of this type{% if task.blunders %} ({{ task.blunders }} blunder{{ task.blunders|pluralize }}){% endif %}, for example
+                {% for example in task.examples %}
+                  <a href="{% url 'game_detail' example.game_id %}">{{ example.move }}</a>{% if not forloop.last %}, {% endif %}
+                {% endfor %}.
+              </div>
+            </div>
+          </div>
+        {% endif %}
+      {% endfor %}
     </div>
   {% endif %}
 

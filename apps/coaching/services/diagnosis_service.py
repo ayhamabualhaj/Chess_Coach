@@ -7,7 +7,7 @@ from django.conf import settings
 
 from ai.agents.diagnosis_agent import DiagnosisAgent, DiagnosisError
 from ai.engine import game_phase
-from ai.tools import MoveRecord, opening_label
+from ai.tools import MoveRecord, build_practice, opening_label
 from apps.accounts.repositories import account_repository
 from apps.coaching.models import WeaknessReport
 from apps.coaching.repositories import report_repository
@@ -109,6 +109,5 @@ def run_report(report_id: int) -> None:
         output_tokens=result.output_tokens,
         seconds=round(result.seconds, 2),
     )
-    plan = result.training_plan
-    if plan:
-        report_repository.save_training_plan(report, plan["overview"], plan["days"], plan["tasks"])
+    # The practice list comes from the mistakes themselves, not from the AI.
+    report_repository.save_training_plan(report, build_practice(records))

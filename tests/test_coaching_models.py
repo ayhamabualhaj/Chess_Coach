@@ -14,6 +14,12 @@ WEAKNESS = {
 }
 
 
+TASKS = [
+    {"theme": "fork", "name": "Forks", "url": "https://lichess.org/training/fork", "puzzles": 6, "done": True},
+    {"theme": "endgame", "name": "Endgame", "url": "https://lichess.org/training/endgame", "puzzles": 3, "done": False},
+]
+
+
 class WeaknessReportTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user("tester", password="pass12345")
@@ -45,14 +51,18 @@ class TrainingPlanTests(TestCase):
         self.report = WeaknessReport.objects.create(user=self.user)
 
     def test_plan_belongs_to_one_report(self):
-        plan = TrainingPlan.objects.create(report=self.report, overview="Daily tactics.")
+        plan = TrainingPlan.objects.create(report=self.report, tasks=TASKS)
         self.assertEqual(self.report.training_plan, plan)
-        self.assertEqual(str(plan), "7-day plan for tester")
+        self.assertEqual(str(plan), "Practice plan for tester")
         with self.assertRaises(IntegrityError):
-            TrainingPlan.objects.create(report=self.report, overview="Second plan.")
+            TrainingPlan.objects.create(report=self.report)
+
+    def test_progress_counts(self):
+        plan = TrainingPlan.objects.create(report=self.report, tasks=TASKS)
+        self.assertEqual((plan.done_count, plan.total_puzzles), (1, 9))
 
     def test_deleting_user_deletes_reports_and_plans(self):
-        TrainingPlan.objects.create(report=self.report, overview="Daily tactics.")
+        TrainingPlan.objects.create(report=self.report, tasks=TASKS)
         self.user.delete()
         self.assertEqual(WeaknessReport.objects.count(), 0)
         self.assertEqual(TrainingPlan.objects.count(), 0)

@@ -40,10 +40,6 @@ class FakeAgent:
                 "how_to_improve": "Check every attacked piece before you move.",
                 "exercises": ["10 hanging-piece puzzles a day"],
             }],
-            training_plan={
-                "overview": "A week of blunder checks.", "days": 7,
-                "tasks": [{"day": 1, "focus": "Hanging pieces", "activity": "Puzzles", "minutes": 20}],
-            },
             model="claude-haiku-5-5", turns=3,
             tool_calls=[ToolCall("get_mistake_summary", {}, 0.01), ToolCall("submit_diagnosis", {}, 0.0)],
             input_tokens=1200, output_tokens=300, seconds=4.2,
@@ -103,12 +99,15 @@ class ReportFlowTests(CoachingTestBase):
         self.assertContains(response, "Hanging pieces")
         self.assertContains(response, reverse("game_detail", args=[self.game.pk]))
         self.assertContains(response, "get_mistake_summary")
-        # Weakness and cure are shown together, followed by the plan.
+        # Weakness and cure are shown together, followed by the practice list.
         self.assertContains(response, "How to improve")
         self.assertContains(response, "10 hanging-piece puzzles a day")
-        self.assertEqual(report.training_plan.overview, "A week of blunder checks.")
-        self.assertContains(response, "7-day training plan")
         self.assertEqual(list(report.games.all()), [self.game])
+        # 2. Qg4 was a hanging-piece blunder -> 3 hanging-piece puzzles, built by code.
+        task = report.training_plan.tasks[0]
+        self.assertEqual((task["theme"], task["puzzles"]), ("hangingPiece", 3))
+        self.assertContains(response, "https://lichess.org/training/hangingPiece")
+        self.assertContains(response, "3 × Hanging pieces puzzles")
 
     def test_agent_error_is_shown_on_the_report(self):
         agent = FakeAgent(error=DiagnosisError("The AI model declined this request."))
@@ -222,3 +221,35 @@ class DeleteGameTests(CoachingTestBase):
         self.client.login(username="intruder", password="pass12345")
         self.assertEqual(self.client.post(reverse("delete_game", args=[self.game.pk])).status_code, 404)
         self.assertTrue(Game.objects.filter(pk=self.game.pk).exists())
+
+
+@override_settings(TASKS=IMMEDIATE_TASKS, ANTHROPIC_API_KEY="test-key")
+class PracticeTests(CoachingTestBase):
+    def setUp(self):
+        super().setUp()
+        with mock.patch.object(diagnosis_service, "_make_agent", return_value=FakeAgent()):
+            self.client.post(reverse("create_report"), self.choose())
+        self.report = WeaknessReport.objects.get()
+
+    def test_tick_and_untick_a_practice_item(self):
+        url = reverse("toggle_practice", args=[self.report.pk, 0])
+        response = self.client.post(url, {"done": "1"})
+        self.assertRedirects(response, reverse("report_detail", args=[self.report.pk]) + "#practice",
+                             fetch_redirect_response=False)
+        self.assertTrue(TrainingPlan.objects.get().tasks[0]["done"])
+        page = self.client.get(reverse("report_detail", args=[self.report.pk]))
+        self.assertContains(page, "1 of 1 done")
+
+        self.client.post(url, {"done": "0"})
+        self.assertFalse(TrainingPlan.objects.get().tasks[0]["done"])
+
+    def test_unknown_item_or_other_user_gives_404(self):
+        self.assertEqual(
+            self.client.post(reverse("toggle_practice", args=[self.report.pk, 9]), {"done": "1"}).status_code, 404
+        )
+        User.objects.create_user("intruder", password="pass12345")
+        self.client.login(username="intruder", password="pass12345")
+        self.assertEqual(
+            self.client.post(reverse("toggle_practice", args=[self.report.pk, 0]), {"done": "1"}).status_code, 404
+        )
+        self.assertFalse(TrainingPlan.objects.get().tasks[0]["done"])

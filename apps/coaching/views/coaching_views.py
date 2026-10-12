@@ -2,6 +2,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http import Http404, JsonResponse
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from apps.coaching.services import coaching_service
@@ -40,3 +41,12 @@ def report_status(request, report_id):
     if report is None:
         raise Http404("Report not found")
     return JsonResponse({"status": report.status, "label": report.get_status_display()})
+
+
+@login_required
+@require_POST
+def toggle_practice(request, report_id, index):
+    done = request.POST.get("done") == "1"
+    if not coaching_service.set_practice_done(request.user, report_id, index, done):
+        raise Http404("Practice item not found")
+    return redirect(f"{reverse('report_detail', args=[report_id])}#practice")
