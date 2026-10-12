@@ -1,5 +1,4 @@
-<td class="{% if cell.mistake.severity == 'blunder' %}table-danger{% elif cell.mistake.severity == 'mistake' %}table-warning{% elif cell.mistake %}table-light{% endif %}">
-  {% if cell %}
+<td class="{% if cell.mistake %}cell-{{ cell.mistake.severity }}{% endif %}">  {% if cell %}
     <span class="fw-semibold">{{ cell.san }}</span>
     {% if cell.mistake %}
       <span class="badge {% if cell.mistake.severity == 'blunder' %}text-bg-danger{% elif cell.mistake.severity == 'mistake' %}text-bg-warning{% else %}text-bg-secondary{% endif %}">{{ cell.mistake.get_severity_display }}</span>

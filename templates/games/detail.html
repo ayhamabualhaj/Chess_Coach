@@ -108,15 +108,20 @@
 {% if rows %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
 <script>
-  const data = JSON.parse(document.getElementById("chart-data").textContent);
+    const data = JSON.parse(document.getElementById("chart-data").textContent);
+  // Take the chart's text, grid and line colours from the Bootstrap theme.
+  const theme = getComputedStyle(document.documentElement);
+  Chart.defaults.color = theme.getPropertyValue("--bs-secondary-color");
+  Chart.defaults.borderColor = theme.getPropertyValue("--bs-border-color-translucent");
+  const lineColor = theme.getPropertyValue("--bs-link-color");
   new Chart(document.getElementById("evalChart"), {
     type: "line",
     data: {
       labels: data.labels,
       datasets: [{
         data: data.evals,
-        borderColor: "#0d6efd",
-        backgroundColor: "rgba(13, 110, 253, 0.12)",
+                borderColor: lineColor,
+        backgroundColor: "rgba(110, 168, 254, 0.15)",
         fill: "origin",
         pointRadius: 0,
         pointHitRadius: 8,

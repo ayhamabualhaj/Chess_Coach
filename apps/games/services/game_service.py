@@ -1,8 +1,6 @@
-import chess
-import chess
 
+import chess
 from apps.games.models import Game, Mistake
-from apps.games.repositories import game_repository
 from apps.games.tasks import analyse_game_task
 from apps.games.models import Mistake
 from apps.games.repositories import game_repository

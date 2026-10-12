@@ -1,8 +1,9 @@
 {% if game.status == "done" %}
   <span class="badge text-bg-success">{{ game.get_status_display }}</span>
-{% elif game.status == "running" or game.status == "queued" %}  <span class="badge text-bg-info">{{ game.get_status_display }}</span>
+{% elif game.status == "running" or game.status == "queued" %}
+  <span class="badge text-bg-info">{{ game.get_status_display }}</span>
 {% elif game.status == "failed" %}
   <span class="badge text-bg-danger">{{ game.get_status_display }}</span>
 {% else %}
-  <span class="badge text-bg-light border">{{ game.get_status_display }}</span>
+  <span class="badge bg-body-secondary text-body border">{{ game.get_status_display }}</span>
 {% endif %}
