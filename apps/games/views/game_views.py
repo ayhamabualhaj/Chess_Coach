@@ -12,10 +12,13 @@ from apps.games.services.pgn_import_service import InvalidPGNError, import_pgn
 def upload_game(request):
     if request.method == "POST":
         pgn = request.POST.get("pgn", "")
+        played_as = request.POST.get("played_as", "auto")
         try:
-            import_pgn(request.user, pgn)
+            import_pgn(request.user, pgn, played_as)
         except InvalidPGNError as e:
-            return render(request, "games/upload.html", {"error": str(e), "pgn": pgn})
+            return render(
+                request, "games/upload.html", {"error": str(e), "pgn": pgn, "played_as": played_as}
+            )
         messages.success(request, "Game uploaded successfully.")
         return redirect("game_list")
     return render(request, "games/upload.html")
@@ -55,3 +58,16 @@ def game_status(request, game_id):
     if game is None:
         raise Http404("Game not found")
     return JsonResponse({"status": game.status, "label": game.get_status_display()})
+
+
+@login_required
+@require_POST
+def set_color(request, game_id):
+    game = game_service.get_game(request.user, game_id)
+    if game is None:
+        raise Http404("Game not found")
+    if game_service.set_user_color(game, request.POST.get("color", "")):
+        messages.success(request, "Saved which side you played.")
+    else:
+        messages.error(request, "Please choose White or Black.")
+    return redirect("game_detail", game_id=game.pk)

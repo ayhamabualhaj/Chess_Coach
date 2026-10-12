@@ -164,10 +164,5 @@ TASKS = {
         "QUEUES": ["default"],
     }
 }
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-haiku-5-5")
-
-
-
-
-
-

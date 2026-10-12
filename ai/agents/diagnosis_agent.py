@@ -228,8 +228,12 @@ class DiagnosisAgent:
         self.max_turns = max_turns
 
     def _create(self, messages: list):
-        # Server-side fallback: if a safety classifier declines the request,
-        # the API re-runs it on Anthropic's recommended fallback model.
+        extra = {}
+        if not self.model.startswith("claude-haiku"):
+            # Server-side fallback: if a safety classifier declines the request,
+            # the API re-runs it on Anthropic's recommended fallback model.
+            # Claude Haiku 5.5 has no server-side fallback, so it is not sent there.
+            extra = {"betas": ["server-side-fallback-2026-07-01"], "fallbacks": "default"}
         return self.client.beta.messages.create(
             model=self.model,
             max_tokens=16000,
@@ -238,9 +242,8 @@ class DiagnosisAgent:
             tool_choice={"type": "auto"},
             output_config={"effort": "medium"},
             cache_control={"type": "ephemeral"},
-            betas=["server-side-fallback-2026-07-01"],
-            fallbacks="default",
             messages=messages,
+            **extra,
         )
 
     def run(self, records: list[MoveRecord], player: dict | None = None) -> DiagnosisResult:
@@ -258,7 +261,7 @@ class DiagnosisAgent:
         for _ in range(self.max_turns):
             try:
                 response = self._create(messages)
-            except anthropic.APIError as exc:
+            except anthropic.AnthropicError as exc:
                 raise DiagnosisError(f"AI service error: {exc}") from exc
             result.turns += 1
             result.model = response.model

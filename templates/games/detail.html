@@ -10,6 +10,7 @@
     <div>
       {% if game.result %}<span class="badge text-bg-secondary">{{ game.result }}</span>{% endif %}
       {% include "games/_status_badge.html" %}
+            {% if game.user_color %}<span class="badge bg-body-secondary text-body border">You played {{ game.get_user_color_display }}</span>{% endif %}
     </div>
   </div>
   <form method="post" action="{% url 'analyse_game' game.pk %}">
@@ -19,6 +20,18 @@
     </button>
   </form>
 </div>
+
+{% if not game.user_color %}
+  <div class="alert alert-warning d-flex flex-wrap align-items-center gap-2">
+    <span class="me-auto">Which side did you play? The coach only uses games where it knows your colour.</span>
+    <form method="post" action="{% url 'set_game_color' game.pk %}" class="d-flex gap-2">
+      {% csrf_token %}
+      <button name="color" value="white" class="btn btn-sm btn-light">I was White</button>
+      <button name="color" value="black" class="btn btn-sm btn-dark border">I was Black</button>
+    </form>
+  </div>
+{% endif %}
+
 
 {% if in_progress %}
   <div class="alert alert-info d-flex align-items-center gap-3" id="analysis-progress"

@@ -16,6 +16,15 @@
   {% csrf_token %}
   <textarea name="pgn" rows="15" class="pgn-input mb-3"
             placeholder='[Event "Casual game"]&#10;&#10;1. e4 e5 2. Nf3 Nc6 ...'>{{ pgn }}</textarea>
+  <div class="mb-3">
+    <label for="played_as" class="form-label">Which side did you play?</label>
+    <select name="played_as" id="played_as" class="form-select w-auto">
+      <option value="auto" {% if played_as == "auto" or not played_as %}selected{% endif %}>Detect from my username</option>
+      <option value="white" {% if played_as == "white" %}selected{% endif %}>White</option>
+      <option value="black" {% if played_as == "black" %}selected{% endif %}>Black</option>
+    </select>
+    <div class="form-text">The coach only looks at your own moves, so it needs to know your colour.</div>
+  </div>
   <button type="submit" class="btn btn-primary">Upload</button>
   <a href="{% url 'game_list' %}" class="btn btn-link">Cancel</a>
 </form>

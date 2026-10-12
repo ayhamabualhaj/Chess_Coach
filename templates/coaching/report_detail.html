@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block title %}Weakness report #{{ report.pk }}{% endblock %}
+
+{% block content %}
+<a href="{% url 'coaching_home' %}" class="small">&larr; Coaching</a>
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <h1 class="h3 mb-0">Weakness report #{{ report.pk }}</h1>
+  {% include "coaching/_report_status_badge.html" %}
+</div>
+
+{% if in_progress %}
+  <div class="alert alert-info d-flex align-items-center gap-3" id="report-progress"
+       data-status-url="{% url 'report_status' report.pk %}">
+    <div class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></div>
+    <div>
+      <strong>{{ report.get_status_display }}…</strong> The AI coach is going through your games. This page refreshes by itself.
+      <div class="small">Nothing happening? Make sure the worker is running: <code>python manage.py db_worker</code></div>
+    </div>
+  </div>
+{% elif report.status == "failed" %}
+  <div class="alert alert-danger">
+    <strong>The report could not be created.</strong> {{ report.error|default:"Please try again." }}
+  </div>
+{% else %}
+  <p class="text-body-secondary">
+    Based on {{ report.games_count }} game{{ report.games_count|pluralize }} and {{ report.moves_count }} of your moves.
+  </p>
+
+  <div class="card shadow-sm mb-4">
+    <div class="card-body">
+      <h2 class="h6 text-body-secondary">Summary</h2>
+      <p class="mb-0">{{ report.summary|linebreaksbr }}</p>
+    </div>
+  </div>
+
+  {% for weakness in weaknesses %}
+    <div class="card shadow-sm mb-3">
+      <div class="card-body">
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+          <span class="badge {% if weakness.priority == 1 %}text-bg-danger{% elif weakness.priority == 2 %}text-bg-warning{% else %}text-bg-secondary{% endif %}">
+            Priority {{ weakness.priority }}
+          </span>
+          <span class="badge bg-body-secondary text-body border">{{ weakness.category|title }}</span>
+          <h2 class="h5 mb-0">{{ weakness.title }}</h2>
+        </div>
+        <p>{{ weakness.explanation }}</p>
+        <p class="small text-body-secondary mb-2"><strong>Evidence:</strong> {{ weakness.evidence }}</p>
+        {% if weakness.games %}
+          <div class="small">
+            Examples:
+            {% for game in weakness.games %}
+              <a href="{% url 'game_detail' game.pk %}">{{ game }}</a>{% if not forloop.last %} · {% endif %}
+            {% endfor %}
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  {% endfor %}
+
+  <details class="mt-4">
+    <summary class="text-body-secondary">How the AI coach worked</summary>
+    <div class="small text-body-secondary mt-2">
+      Model <code>{{ report.ai_model }}</code> · {{ report.turns }} turns · {{ report.seconds }} s ·
+      {{ total_tokens }} tokens ({{ report.input_tokens }} in, {{ report.output_tokens }} out)
+      <ol class="mt-2 mb-0">
+        {% for call in report.tool_calls %}
+          <li><code>{{ call.name }}</code>{% if call.is_error %} <span class="text-danger">(rejected, the agent retried)</span>{% endif %}</li>
+        {% endfor %}
+      </ol>
+    </div>
+  </details>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if in_progress %}
+<script>
+  // Ask the server every 2 seconds whether the report is ready, then reload.
+  const box = document.getElementById("report-progress");
+  const timer = setInterval(async () => {
+    const response = await fetch(box.dataset.statusUrl);
+    const { status } = await response.json();
+    if (status !== "queued" && status !== "running") {
+      clearInterval(timer);
+      window.location.reload();
+    }
+  }, 2000);
+</script>
+{% endif %}
+{% endblock %}

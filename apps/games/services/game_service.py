@@ -1,9 +1,8 @@
-
 import chess
+
 from apps.games.models import Game, Mistake
-from apps.games.tasks import analyse_game_task
-from apps.games.models import Mistake
 from apps.games.repositories import game_repository
+from apps.games.tasks import analyse_game_task
 
 # The graph is cut off at +/- 10 pawns so one mate score doesn't flatten everything else.
 CHART_LIMIT_PAWNS = 10
@@ -15,6 +14,13 @@ def list_games(user):
 
 def get_game(user, game_id: int):
     return game_repository.get_game_for_user(user, game_id)
+
+def set_user_color(game: Game, color: str) -> bool:
+    """Record which side the user played. Returns False for an invalid colour."""
+    if color not in Game.Side.values:
+        return False
+    game_repository.set_user_color(game, color)
+    return True
 
 def request_analysis(game: Game) -> bool:
     """Put the game in the background queue. Returns False if it is already queued or running."""

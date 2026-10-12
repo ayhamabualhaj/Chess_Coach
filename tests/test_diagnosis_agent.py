@@ -141,3 +141,20 @@ class DiagnosisAgentTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+
+class FallbackParameterTests(unittest.TestCase):
+    def submit_only(self):
+        return FakeClient([response(tool_use("t1", "submit_diagnosis", {"summary": "s", "weaknesses": [WEAKNESS]}))])
+
+    def test_haiku_requests_do_not_send_fallbacks(self):
+        # Claude Haiku 5.5 has no server-side fallback.
+        client = self.submit_only()
+        DiagnosisAgent(client=client, model="claude-haiku-5-5").run(RECORDS)
+        self.assertNotIn("fallbacks", client.requests[0])
+
+    def test_other_models_send_default_fallbacks(self):
+        client = self.submit_only()
+        DiagnosisAgent(client=client, model="claude-sonnet-5-5").run(RECORDS)
+        self.assertEqual(client.requests[0]["fallbacks"], "default")

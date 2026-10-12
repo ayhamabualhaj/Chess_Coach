@@ -22,6 +22,7 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("accounts/", include("apps.accounts.urls")),
     path("games/", include("apps.games.urls")),
+    path("coaching/", include("apps.coaching.urls")),
     # The home page sends users to their games list for now.
     path("", RedirectView.as_view(url="/games/", permanent=False)),
 

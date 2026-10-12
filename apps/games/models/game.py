@@ -11,6 +11,10 @@ class Game(models.Model):
         DONE = "done", "Analysed"
         FAILED = "failed", "Analysis failed"
 
+    class Side(models.TextChoices):
+        WHITE = "white", "White"
+        BLACK = "black", "Black"
+
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -21,6 +25,8 @@ class Game(models.Model):
     white = models.CharField(max_length=100, blank=True)
     black = models.CharField(max_length=100, blank=True)
     result = models.CharField(max_length=10, blank=True)
+    # Which side the uploading user played; coaching only looks at their own moves.
+    user_color = models.CharField(max_length=5, choices=Side.choices, blank=True)
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
     # Short reason shown to the user when the analysis fails.
     analysis_error = models.CharField(max_length=200, blank=True)

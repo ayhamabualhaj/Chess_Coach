@@ -1,8 +1,13 @@
-from apps.games.models import Game
+from django.db.models import F
+
+from apps.games.models import Game, Move
 
 
-def create_game(user, pgn: str, white: str = "", black: str = "", result: str = "") -> Game:
-    return Game.objects.create(user=user, pgn=pgn, white=white, black=black, result=result)
+def create_game(user, pgn: str, white: str = "", black: str = "", result: str = "",
+                user_color: str = "") -> Game:
+    return Game.objects.create(
+        user=user, pgn=pgn, white=white, black=black, result=result, user_color=user_color
+    )
 
 
 def list_games_for_user(user):
@@ -27,3 +32,37 @@ def set_status(game: Game, status: str, error: str = "") -> None:
     game.status = status
     game.analysis_error = error[:200]
     game.save(update_fields=["status", "analysis_error"])
+
+
+def set_user_color(game: Game, color: str) -> None:
+    game.user_color = color
+    game.save(update_fields=["user_color"])
+
+
+def list_games_for_coaching(user):
+    """Analysed games where we know which side the user played."""
+    return Game.objects.filter(user=user, status=Game.Status.DONE).exclude(user_color="")
+
+
+def list_user_moves(games):
+    """The user's own moves in these games (not the opponent's), in game order."""
+    return (
+        Move.objects.filter(game__in=games, color=F("game__user_color"))
+        .select_related("mistake")
+        .order_by("game_id", "ply")
+    )
+
+
+def get_games_for_user(user, game_ids):
+    return Game.objects.filter(user=user, pk__in=game_ids)
+
+
+def count_games_by_state(user) -> dict:
+    """How many of the user's games are ready for coaching, and why the others are not."""
+    games = Game.objects.filter(user=user)
+    analysed = games.filter(status=Game.Status.DONE)
+    return {
+        "ready": analysed.exclude(user_color="").count(),
+        "missing_side": analysed.filter(user_color="").count(),
+        "not_analysed": games.exclude(status=Game.Status.DONE).count(),
+    }

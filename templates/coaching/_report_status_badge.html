@@ -1,0 +1,7 @@
+{% if report.status == "done" %}
+  <span class="badge text-bg-success">{{ report.get_status_display }}</span>
+{% elif report.status == "failed" %}
+  <span class="badge text-bg-danger">{{ report.get_status_display }}</span>
+{% else %}
+  <span class="badge text-bg-info">{{ report.get_status_display }}</span>
+{% endif %}
