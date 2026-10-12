@@ -1,10 +1,9 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 
-from ai.engine import EngineNotFoundError
 from ai.engine.stockfish_wrapper import MATE_SCORE
 from apps.games.models import Game, Mistake, Move
-from apps.games.services.analysis_service import analyse_game
+from apps.games.services.analysis_service import AnalysisError, analyse_game
 from tests.test_stockfish_wrapper import HAS_STOCKFISH, STOCKFISH_PATH
 
 # 3...Nf6?? lets White mate with 4. Qxf7#.
@@ -56,7 +55,7 @@ class AnalyseGameTests(AnalysisServiceTestBase):
 @override_settings(STOCKFISH_PATH="/no/such/stockfish")
 class AnalyseGameFailureTests(AnalysisServiceTestBase):
     def test_missing_engine_marks_game_failed(self):
-        with self.assertRaises(EngineNotFoundError):
+        with self.assertRaises(AnalysisError):
             analyse_game(self.game.pk)
         self.game.refresh_from_db()
         self.assertEqual(self.game.status, Game.Status.FAILED)

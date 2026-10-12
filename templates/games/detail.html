@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block title %}{{ game }}{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-4">
+  <div>
+    <a href="{% url 'game_list' %}" class="small">&larr; My games</a>
+    <h1 class="h3 mb-1">{{ game.white|default:"?" }} vs {{ game.black|default:"?" }}</h1>
+    <div>
+      {% if game.result %}<span class="badge text-bg-secondary">{{ game.result }}</span>{% endif %}
+      {% include "games/_status_badge.html" %}
+    </div>
+  </div>
+  <form method="post" action="{% url 'analyse_game' game.pk %}">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-primary">
+      {% if game.status == "done" %}Analyse again{% else %}Analyse with Stockfish{% endif %}
+    </button>
+  </form>
+</div>
+
+{% if not rows %}
+  <div class="text-center text-body-secondary py-5 border rounded">
+    This game has not been analysed yet. Click <strong>Analyse with Stockfish</strong> to start.
+  </div>
+{% else %}
+  <div class="row g-3 mb-4">
+    {% for side, s in stats.items %}
+      <div class="col-md-6">
+        <div class="card h-100 shadow-sm">
+          <div class="card-body">
+            <h2 class="h6 text-body-secondary mb-3">
+              {% if side == "white" %}White · {{ game.white|default:"?" }}{% else %}Black · {{ game.black|default:"?" }}{% endif %}
+            </h2>
+            <div class="d-flex flex-wrap gap-4">
+              <div><div class="fs-4 fw-semibold">{{ s.avg_cp_loss|default:"–" }}</div><div class="small text-body-secondary">avg. centipawn loss</div></div>
+              <div><div class="fs-4 fw-semibold text-warning-emphasis">{{ s.inaccuracy }}</div><div class="small text-body-secondary">inaccuracies</div></div>
+              <div><div class="fs-4 fw-semibold text-warning">{{ s.mistake }}</div><div class="small text-body-secondary">mistakes</div></div>
+              <div><div class="fs-4 fw-semibold text-danger">{{ s.blunder }}</div><div class="small text-body-secondary">blunders</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+
+  <div class="card shadow-sm mb-4">
+    <div class="card-body">
+      <h2 class="h6 text-body-secondary">Evaluation (pawns, + = White better)</h2>
+      <div class="eval-chart"><canvas id="evalChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card shadow-sm mb-4">
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0 moves-table">
+        <thead>
+          <tr><th class="text-body-secondary move-number">#</th><th>White</th><th>Black</th></tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+            <tr>
+              <td class="text-body-secondary">{{ row.number }}.</td>
+              {% include "games/_move_cell.html" with cell=row.white %}
+              {% include "games/_move_cell.html" with cell=row.black %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {{ chart|json_script:"chart-data" }}
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if rows %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
+<script>
+  const data = JSON.parse(document.getElementById("chart-data").textContent);
+  new Chart(document.getElementById("evalChart"), {
+    type: "line",
+    data: {
+      labels: data.labels,
+      datasets: [{
+        data: data.evals,
+        borderColor: "#0d6efd",
+        backgroundColor: "rgba(13, 110, 253, 0.12)",
+        fill: "origin",
+        pointRadius: 0,
+        pointHitRadius: 8,
+        tension: 0.2,
+      }],
+    },
+    options: {
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: (ctx) => (ctx.parsed.y > 0 ? "+" : "") + ctx.parsed.y.toFixed(2) } },
+      },
+      scales: {
+        y: { min: -10, max: 10, ticks: { stepSize: 2 } },
+        x: { ticks: { maxTicksLimit: 12 } },
+      },
+    },
+  });
+</script>
+{% endif %}
+{% endblock %}

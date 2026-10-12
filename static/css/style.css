@@ -14,3 +14,6 @@
 .errorlist { color: var(--bs-danger); list-style: none; padding-left: 0; margin-bottom: 0.25rem; }
 
 .pgn-input { font-family: var(--bs-font-monospace); font-size: 0.875rem; }
+.eval-chart { position: relative; height: 260px; }
+.moves-table .move-number { width: 3rem; }
+.moves-table td + td { min-width: 8rem; }

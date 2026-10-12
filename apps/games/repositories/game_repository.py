@@ -13,6 +13,16 @@ def get_game(game_id: int) -> Game:
     return Game.objects.get(pk=game_id)
 
 
+def get_game_for_user(user, game_id: int) -> Game | None:
+    # Filtering by user means nobody can open someone else's game by guessing its id.
+    return Game.objects.filter(user=user, pk=game_id).first()
+
+
+def list_moves_with_mistakes(game: Game):
+    # select_related fetches each move's mistake in the same query.
+    return game.moves.select_related("mistake").order_by("ply")
+
+
 def set_status(game: Game, status: str) -> None:
     game.status = status
     game.save(update_fields=["status"])

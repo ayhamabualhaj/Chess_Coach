@@ -4,7 +4,7 @@ import chess
 import chess.pgn
 from django.conf import settings
 
-from ai.engine import Score, StockfishEngine, centipawn_loss, classify_move, game_phase
+from ai.engine import EngineNotFoundError, Score, StockfishEngine, centipawn_loss, classify_move, game_phase
 from ai.engine.stockfish_wrapper import MATE_SCORE
 from apps.games.models import Game
 from apps.games.repositories import analysis_repository, game_repository
@@ -35,6 +35,9 @@ def analyse_game(game_id: int, depth: int | None = None) -> dict:
     try:
         move_rows, mistake_rows = _evaluate_moves(parsed, depth or settings.STOCKFISH_DEPTH)
         analysis_repository.replace_analysis(game, move_rows, mistake_rows)
+    except EngineNotFoundError as e:
+        game_repository.set_status(game, Game.Status.FAILED)
+        raise AnalysisError("The chess engine is not available. Check STOCKFISH_PATH.") from e
     except Exception:
         game_repository.set_status(game, Game.Status.FAILED)
         raise
