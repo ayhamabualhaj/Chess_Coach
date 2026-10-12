@@ -16,8 +16,11 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from django.views.generic import RedirectView
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
-    path("", include("apps.games.urls")),
+    path("admin/", admin.site.urls),
+    path("games/", include("apps.games.urls")),
+    # The home page sends users to their games list for now.
+    path("", RedirectView.as_view(url="/games/", permanent=False)),
 ]
