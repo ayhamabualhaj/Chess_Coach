@@ -1,3 +1,10 @@
+<p>
+  Logged in as {{ user.username }}
+  <form method="post" action="{% url 'logout' %}" style="display:inline">
+    {% csrf_token %}
+    <button type="submit">Log out</button>
+  </form>
+</p>
 <h1>My games</h1>
 <a href="{% url 'upload_game' %}">Upload a game</a>
 <ul>

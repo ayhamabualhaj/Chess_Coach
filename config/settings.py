@@ -140,9 +140,6 @@ MAILERS = {
     },
 }
 
-
-# Authentication
-# Temporary: use the admin login page until the accounts app has its own.
 # Authentication
 LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "game_list"
