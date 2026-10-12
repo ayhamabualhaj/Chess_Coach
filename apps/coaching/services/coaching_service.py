@@ -12,19 +12,32 @@ def get_overview(user) -> dict:
     """Everything the coaching page needs."""
     return {
         "games": game_repository.count_games_by_state(user),
+        "ready_games": game_repository.list_games_for_coaching(user),
         "reports": report_repository.list_reports_for_user(user),
     }
 
 
-def request_report(user) -> WeaknessReport:
-    """Queue a new weakness report for the user."""
-    if game_repository.count_games_by_state(user)["ready"] == 0:
+def _parse_ids(game_ids) -> set[int]:
+    try:
+        return {int(game_id) for game_id in game_ids}
+    except (TypeError, ValueError):
+        raise CoachingError("Invalid game selection.")
+
+
+def request_report(user, game_ids) -> WeaknessReport:
+    """Queue a new report (weaknesses + training plan) for the chosen games."""
+    chosen = _parse_ids(game_ids)
+    if not chosen:
+        raise CoachingError("Choose at least one game for the coach to study.")
+    games = list(game_repository.get_ready_games(user, chosen))
+    if len(games) != len(chosen):
         raise CoachingError(
-            "Analyse at least one game and say which side you played before asking for a report."
+            "Some chosen games are not ready: they must be analysed and have your side set."
         )
     if report_repository.has_report_in_progress(user):
         raise CoachingError("A report is already being prepared.")
-    report = report_repository.create_report(user)
+
+    report = report_repository.create_report(user, games)
     generate_report_task.enqueue(report.pk)
     return report
 
@@ -46,7 +59,9 @@ def get_report_detail(user, report_id: int) -> dict | None:
     ]
     return {
         "report": report,
+        "report_games": report_repository.list_report_games(report),
         "weaknesses": weaknesses,
+        "plan": report_repository.get_training_plan(report),
         "in_progress": report.status in (WeaknessReport.Status.QUEUED, WeaknessReport.Status.RUNNING),
         "total_tokens": report.input_tokens + report.output_tokens,
     }

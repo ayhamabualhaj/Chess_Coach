@@ -18,7 +18,7 @@ def coaching_home(request):
 @require_POST
 def create_report(request):
     try:
-        report = coaching_service.request_report(request.user)
+        report = coaching_service.request_report(request.user, request.POST.getlist("games"))
     except CoachingError as e:
         messages.error(request, str(e))
         return redirect("coaching_home")

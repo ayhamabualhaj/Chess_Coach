@@ -8,6 +8,8 @@ from ai.agents.diagnosis_agent import DiagnosisAgent, DiagnosisError
 from ai.tools.stats_tools import MoveRecord
 
 FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+# After 1. e4 d5, White to move: 2. Qg4?? hangs the queen to Bxg4.
+AFTER_E4_D5 = "rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2"
 
 RECORDS = [
     MoveRecord(game_id=1, ply=1, san="e4", fen_before=FEN, phase="opening", cp_loss=10),
@@ -24,7 +26,22 @@ WEAKNESS = {
     "evidence": "2 blunders with hanging_piece (400 and 250 cp).",
     "example_game_ids": [1, 2],
     "priority": 1,
+    "how_to_improve": "Before every move, check which of your pieces the opponent attacks.",
+    "exercises": ["Solve 10 'hanging piece' puzzles a day.", "Replay your two blunders."],
 }
+
+PLAN = {
+    "overview": "One week focused on piece safety.",
+    "days": 7,
+    "tasks": [
+        {"day": 3, "focus": "Piece safety", "activity": "Play 3 rapid games, blunder-check every move.", "minutes": 45},
+        {"day": 1, "focus": "Piece safety", "activity": "Hanging-piece puzzles.", "minutes": 20},
+    ],
+}
+
+
+def submission(weaknesses=None, plan=None, summary="Solid, but drops pieces."):
+    return {"summary": summary, "weaknesses": weaknesses or [WEAKNESS], "training_plan": plan or PLAN}
 
 
 def tool_use(block_id, name, tool_input):
@@ -62,13 +79,13 @@ class DiagnosisAgentTests(unittest.TestCase):
         client = FakeClient([
             response(tool_use("t1", "get_mistake_summary", {})),
             response(tool_use("t2", "get_worst_moves", {"limit": 2, "motif": "hanging_piece", "phase": ""})),
-            response(tool_use("t3", "submit_diagnosis", {"summary": "Solid, but drops pieces.",
-                                                         "weaknesses": [WEAKNESS]})),
+            response(tool_use("t3", "submit_diagnosis", submission())),
         ])
         result = DiagnosisAgent(client=client).run(RECORDS, player={"name": "ayham", "rating": 1200})
 
         self.assertEqual(result.summary, "Solid, but drops pieces.")
         self.assertEqual(result.weaknesses[0]["title"], "Leaving pieces undefended")
+        self.assertEqual(result.weaknesses[0]["exercises"][0], "Solve 10 'hanging piece' puzzles a day.")
         self.assertEqual(result.turns, 3)
         self.assertEqual([c.name for c in result.tool_calls],
                          ["get_mistake_summary", "get_worst_moves", "submit_diagnosis"])
@@ -81,11 +98,38 @@ class DiagnosisAgentTests(unittest.TestCase):
         self.assertEqual([w["cp_loss"] for w in worst], [400, 250])
         self.assertIn("Rating: 1200", client.requests[0]["messages"][0]["content"])
 
+    def test_best_move_is_given_in_normal_notation(self):
+        client = FakeClient([
+            response(tool_use("t1", "get_worst_moves", {"limit": 1, "motif": "", "phase": ""})),
+            response(tool_use("t2", "submit_diagnosis", submission())),
+        ])
+        DiagnosisAgent(client=client).run(RECORDS)
+        worst = json.loads(tool_results(client.requests[1])[0]["content"])
+        self.assertEqual(worst[0]["best_move"], "d4")  # not "d2d4"
+
+    def test_training_plan_is_returned_sorted_by_day(self):
+        client = FakeClient([response(tool_use("t1", "submit_diagnosis", submission()))])
+        result = DiagnosisAgent(client=client).run(RECORDS)
+        self.assertEqual(result.training_plan["days"], 7)
+        self.assertEqual([t["day"] for t in result.training_plan["tasks"]], [1, 3])
+
+    def test_task_outside_the_plan_is_rejected_and_model_retries(self):
+        bad_plan = {**PLAN, "days": 2, "tasks": [{**PLAN["tasks"][0], "day": 5}]}
+        client = FakeClient([
+            response(tool_use("t1", "submit_diagnosis", submission(plan=bad_plan))),
+            response(tool_use("t2", "submit_diagnosis", submission())),
+        ])
+        result = DiagnosisAgent(client=client).run(RECORDS)
+        error = tool_results(client.requests[1])[0]
+        self.assertTrue(error["is_error"])
+        self.assertIn("between 1 and 2", error["content"])
+        self.assertEqual(result.training_plan["days"], 7)
+
     def test_invented_game_id_is_rejected_and_model_retries(self):
         bad = {**WEAKNESS, "example_game_ids": [99]}
         client = FakeClient([
-            response(tool_use("t1", "submit_diagnosis", {"summary": "x", "weaknesses": [bad]})),
-            response(tool_use("t2", "submit_diagnosis", {"summary": "x", "weaknesses": [WEAKNESS]})),
+            response(tool_use("t1", "submit_diagnosis", submission(weaknesses=[bad]))),
+            response(tool_use("t2", "submit_diagnosis", submission())),
         ])
         result = DiagnosisAgent(client=client).run(RECORDS)
 
@@ -99,16 +143,27 @@ class DiagnosisAgentTests(unittest.TestCase):
         client = FakeClient([
             response(tool_use("a", "get_mistake_summary", {}),
                      tool_use("b", "get_opening_breakdown", {"min_games": 1})),
-            response(tool_use("c", "submit_diagnosis", {"summary": "x", "weaknesses": [WEAKNESS]})),
+            response(tool_use("c", "submit_diagnosis", submission())),
         ])
         DiagnosisAgent(client=client).run(RECORDS)
         self.assertEqual([r["tool_use_id"] for r in tool_results(client.requests[1])], ["a", "b"])
 
+    def test_explain_position_takes_normal_notation(self):
+        client = FakeClient([
+            response(tool_use("t1", "explain_position",
+                              {"fen_before": AFTER_E4_D5, "played_move": "Qg4", "best_move": "exd5"})),
+            response(tool_use("t2", "submit_diagnosis", submission())),
+        ])
+        DiagnosisAgent(client=client).run(RECORDS)
+        result = tool_results(client.requests[1])[0]
+        self.assertFalse(result["is_error"])
+        self.assertEqual(json.loads(result["content"]), {"motifs": ["hanging_piece"]})
+
     def test_bad_position_returns_tool_error(self):
         client = FakeClient([
             response(tool_use("t1", "explain_position",
-                              {"fen_before": "not a fen", "played_uci": "e2e4", "best_uci": ""})),
-            response(tool_use("t2", "submit_diagnosis", {"summary": "x", "weaknesses": [WEAKNESS]})),
+                              {"fen_before": "not a fen", "played_move": "e4", "best_move": ""})),
+            response(tool_use("t2", "submit_diagnosis", submission())),
         ])
         DiagnosisAgent(client=client).run(RECORDS)
         self.assertTrue(tool_results(client.requests[1])[0]["is_error"])
@@ -139,14 +194,9 @@ class DiagnosisAgentTests(unittest.TestCase):
         self.assertEqual(client.requests, [])
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
-
 class FallbackParameterTests(unittest.TestCase):
     def submit_only(self):
-        return FakeClient([response(tool_use("t1", "submit_diagnosis", {"summary": "s", "weaknesses": [WEAKNESS]}))])
+        return FakeClient([response(tool_use("t1", "submit_diagnosis", submission()))])
 
     def test_haiku_requests_do_not_send_fallbacks(self):
         # Claude Haiku 5.5 has no server-side fallback.
@@ -158,3 +208,7 @@ class FallbackParameterTests(unittest.TestCase):
         client = self.submit_only()
         DiagnosisAgent(client=client, model="claude-sonnet-5-5").run(RECORDS)
         self.assertEqual(client.requests[0]["fallbacks"], "default")
+
+
+if __name__ == "__main__":
+    unittest.main()

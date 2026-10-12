@@ -10,15 +10,22 @@
     <div>
       {% if game.result %}<span class="badge text-bg-secondary">{{ game.result }}</span>{% endif %}
       {% include "games/_status_badge.html" %}
-            {% if game.user_color %}<span class="badge bg-body-secondary text-body border">You played {{ game.get_user_color_display }}</span>{% endif %}
+      {% if game.user_color %}<span class="badge bg-body-secondary text-body border">You played {{ game.get_user_color_display }}</span>{% endif %}
     </div>
   </div>
-  <form method="post" action="{% url 'analyse_game' game.pk %}">
-    {% csrf_token %}
-    <button type="submit" class="btn btn-primary" {% if in_progress %}disabled{% endif %}>
-      {% if game.status == "done" %}Analyse again{% else %}Analyse with Stockfish{% endif %}
-    </button>
-  </form>
+  <div class="d-flex gap-2">
+    <form method="post" action="{% url 'analyse_game' game.pk %}">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-primary" {% if in_progress %}disabled{% endif %}>
+        {% if game.status == "done" %}Analyse again{% else %}Analyse with Stockfish{% endif %}
+      </button>
+    </form>
+    <form method="post" action="{% url 'delete_game' game.pk %}"
+          onsubmit="return confirm('Delete this game and its analysis?');">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-outline-danger">Delete</button>
+    </form>
+  </div>
 </div>
 
 {% if not game.user_color %}
@@ -31,7 +38,6 @@
     </form>
   </div>
 {% endif %}
-
 
 {% if in_progress %}
   <div class="alert alert-info d-flex align-items-center gap-3" id="analysis-progress"
@@ -121,7 +127,7 @@
 {% if rows %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
 <script>
-    const data = JSON.parse(document.getElementById("chart-data").textContent);
+  const data = JSON.parse(document.getElementById("chart-data").textContent);
   // Take the chart's text, grid and line colours from the Bootstrap theme.
   const theme = getComputedStyle(document.documentElement);
   Chart.defaults.color = theme.getPropertyValue("--bs-secondary-color");
@@ -133,7 +139,7 @@
       labels: data.labels,
       datasets: [{
         data: data.evals,
-                borderColor: lineColor,
+        borderColor: lineColor,
         backgroundColor: "rgba(110, 168, 254, 0.15)",
         fill: "origin",
         pointRadius: 0,

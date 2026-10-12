@@ -1,13 +1,21 @@
 {% extends "base.html" %}
 
-{% block title %}Weakness report #{{ report.pk }}{% endblock %}
+{% block title %}Coaching report #{{ report.pk }}{% endblock %}
 
 {% block content %}
 <a href="{% url 'coaching_home' %}" class="small">&larr; Coaching</a>
-<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-  <h1 class="h3 mb-0">Weakness report #{{ report.pk }}</h1>
+<div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+  <h1 class="h3 mb-0">Coaching report #{{ report.pk }}</h1>
   {% include "coaching/_report_status_badge.html" %}
 </div>
+{% if report_games %}
+  <p class="small text-body-secondary">
+    Games:
+    {% for game in report_games %}
+      <a href="{% url 'game_detail' game.pk %}">{{ game }}</a>{% if not forloop.last %} · {% endif %}
+    {% endfor %}
+  </p>
+{% endif %}
 
 {% if in_progress %}
   <div class="alert alert-info d-flex align-items-center gap-3" id="report-progress"
@@ -34,6 +42,7 @@
     </div>
   </div>
 
+  <h2 class="h5 mb-3">Your weaknesses and how to fix them</h2>
   {% for weakness in weaknesses %}
     <div class="card shadow-sm mb-3">
       <div class="card-body">
@@ -42,21 +51,59 @@
             Priority {{ weakness.priority }}
           </span>
           <span class="badge bg-body-secondary text-body border">{{ weakness.category|title }}</span>
-          <h2 class="h5 mb-0">{{ weakness.title }}</h2>
+          <h3 class="h5 mb-0">{{ weakness.title }}</h3>
         </div>
         <p>{{ weakness.explanation }}</p>
         <p class="small text-body-secondary mb-2"><strong>Evidence:</strong> {{ weakness.evidence }}</p>
         {% if weakness.games %}
-          <div class="small">
+          <div class="small mb-3">
             Examples:
             {% for game in weakness.games %}
               <a href="{% url 'game_detail' game.pk %}">{{ game }}</a>{% if not forloop.last %} · {% endif %}
             {% endfor %}
           </div>
         {% endif %}
+
+        {% if weakness.how_to_improve %}
+          <div class="improve-box rounded p-3">
+            <h4 class="h6 mb-2">How to improve</h4>
+            <p class="mb-2">{{ weakness.how_to_improve }}</p>
+            {% if weakness.exercises %}
+              <ul class="mb-0">
+                {% for exercise in weakness.exercises %}<li>{{ exercise }}</li>{% endfor %}
+              </ul>
+            {% endif %}
+          </div>
+        {% endif %}
       </div>
     </div>
   {% endfor %}
+
+  {% if plan %}
+    <h2 class="h5 mt-4 mb-3">Your {{ plan.days }}-day training plan</h2>
+    <div class="card shadow-sm mb-4">
+      <div class="card-body">
+        <p>{{ plan.overview }}</p>
+        <div class="table-responsive">
+          <table class="table table-sm align-middle mb-0">
+            <thead>
+              <tr><th>Day</th><th>Focus</th><th>What to do</th><th class="text-end">Minutes</th></tr>
+            </thead>
+            <tbody>
+              {% for task in plan.tasks %}
+                <tr>
+                  <td>{{ task.day }}</td>
+                  <td>{{ task.focus }}</td>
+                  <td>{{ task.activity }}</td>
+                  <td class="text-end">{{ task.minutes }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  {% endif %}
 
   <details class="mt-4">
     <summary class="text-body-secondary">How the AI coach worked</summary>

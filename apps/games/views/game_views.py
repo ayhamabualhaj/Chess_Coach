@@ -71,3 +71,15 @@ def set_color(request, game_id):
     else:
         messages.error(request, "Please choose White or Black.")
     return redirect("game_detail", game_id=game.pk)
+
+
+
+@login_required
+@require_POST
+def delete_game(request, game_id):
+    game = game_service.get_game(request.user, game_id)
+    if game is None:
+        raise Http404("Game not found")
+    game_service.delete_game(game)
+    messages.success(request, "Game deleted.")
+    return redirect("game_list")

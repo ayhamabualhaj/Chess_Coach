@@ -1,8 +1,14 @@
-from apps.coaching.models import WeaknessReport
+from apps.coaching.models import TrainingPlan, WeaknessReport
 
 
-def create_report(user) -> WeaknessReport:
-    return WeaknessReport.objects.create(user=user)
+def create_report(user, games) -> WeaknessReport:
+    report = WeaknessReport.objects.create(user=user)
+    report.games.set(games)
+    return report
+
+
+def list_report_games(report: WeaknessReport):
+    return report.games.all()
 
 
 def get_report(report_id: int) -> WeaknessReport:
@@ -36,3 +42,14 @@ def save_result(report: WeaknessReport, **fields) -> None:
     report.status = WeaknessReport.Status.DONE
     report.error = ""
     report.save()
+
+
+def save_training_plan(report: WeaknessReport, overview: str, days: int, tasks: list) -> TrainingPlan:
+    plan, _ = TrainingPlan.objects.update_or_create(
+        report=report, defaults={"overview": overview, "days": days, "tasks": tasks}
+    )
+    return plan
+
+
+def get_training_plan(report: WeaknessReport) -> TrainingPlan | None:
+    return TrainingPlan.objects.filter(report=report).first()

@@ -15,6 +15,9 @@ def list_games(user):
 def get_game(user, game_id: int):
     return game_repository.get_game_for_user(user, game_id)
 
+def delete_game(game: Game) -> None:
+    game_repository.delete_game(game)
+
 def set_user_color(game: Game, color: str) -> bool:
     """Record which side the user played. Returns False for an invalid colour."""
     if color not in Game.Side.values:

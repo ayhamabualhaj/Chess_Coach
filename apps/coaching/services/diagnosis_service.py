@@ -32,9 +32,14 @@ def _opening_of(game) -> str:
     return opening_label(dict(parsed.headers), sans)
 
 
-def build_move_records(user) -> list[MoveRecord]:
-    """Turn the user's analysed moves (their own side only) into MoveRecords for the agent."""
-    games = list(game_repository.list_games_for_coaching(user))
+def build_move_records(user, games=None) -> list[MoveRecord]:
+    """Turn the user's analysed moves (their own side only) into MoveRecords for the agent.
+
+    games: the games to use; by default every game that is ready for coaching.
+    """
+    if games is None:
+        games = game_repository.list_games_for_coaching(user)
+    games = list(games)
     openings = {game.pk: _opening_of(game) for game in games}
 
     records = []
@@ -68,7 +73,12 @@ def run_report(report_id: int) -> None:
         )
         return
 
-    records = build_move_records(report.user)
+    records = build_move_records(report.user, report_repository.list_report_games(report))
+    if not records:
+        report_repository.set_status(
+            report, WeaknessReport.Status.FAILED, "None of the chosen games has analysed moves."
+        )
+        return
     profile = account_repository.get_profile(report.user)
     player = {"name": report.user.username, "rating": profile.rating if profile else None}
 
@@ -99,3 +109,6 @@ def run_report(report_id: int) -> None:
         output_tokens=result.output_tokens,
         seconds=round(result.seconds, 2),
     )
+    plan = result.training_plan
+    if plan:
+        report_repository.save_training_plan(report, plan["overview"], plan["days"], plan["tasks"])

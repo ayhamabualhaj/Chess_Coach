@@ -16,6 +16,8 @@ class WeaknessReport(models.Model):
         on_delete=models.CASCADE,
         related_name="weakness_reports",
     )
+    # The games the player chose for this report.
+    games = models.ManyToManyField("games.Game", related_name="weakness_reports", blank=True)
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.QUEUED)
     # Short reason shown to the user when the agent fails.
     error = models.CharField(max_length=200, blank=True)

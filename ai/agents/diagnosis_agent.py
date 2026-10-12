@@ -1,11 +1,13 @@
-"""Diagnosis agent: finds a player's recurring weaknesses with Claude and tool use.
+"""Diagnosis agent: finds a player's recurring weaknesses with Claude and tool use,
+and writes how to fix them plus a training plan.
 
 The agent is a loop, not a single API call. Claude gets a short description
 of the player and a set of tools over their analysed moves (the functions in
 ai/tools). It decides which statistics to look at, asks for concrete example
 positions, and finishes by calling `submit_diagnosis` with a structured list
-of weaknesses. Every weakness must cite games that really exist in the data;
-if it does not, the tool returns an error and Claude has to fix it.
+of weaknesses (each with how to improve and exercises) and a training plan.
+Every weakness must cite games that really exist in the data and the plan must
+be valid; if not, the tool returns an error and Claude has to fix it.
 
 Pure Python, no Django: the caller passes in MoveRecord objects and,
 optionally, an Anthropic client (tests pass a fake one).
@@ -19,6 +21,7 @@ import time
 from dataclasses import dataclass, field
 
 import anthropic
+import chess
 
 from ai.tools.motif_tools import detect_motifs
 from ai.tools.stats_tools import PHASES, MoveRecord, opening_breakdown, summarize_mistakes, worst_moves
@@ -26,6 +29,7 @@ from ai.tools.stats_tools import PHASES, MoveRecord, opening_breakdown, summariz
 DEFAULT_MODEL = "claude-opus-5-5"
 MAX_TURNS = 8
 MAX_WORST_MOVES = 10
+MAX_PLAN_DAYS = 14
 
 CATEGORIES = ("tactics", "opening", "middlegame", "endgame", "time_or_focus", "other")
 MOTIFS = (
@@ -33,20 +37,27 @@ MOTIFS = (
     "missed_capture", "missed_check", "allowed_forced_mate", "missed_forced_mate",
 )
 
-SYSTEM_PROMPT = """You are a chess coach's diagnosis assistant. Your job is to find the 2-4 \
-most important recurring weaknesses of one player, based only on engine analysis of their games.
+SYSTEM_PROMPT = """You are a chess coach. You study engine analysis of one player's games, find \
+their 2-4 most important recurring weaknesses, and tell them exactly how to fix each one.
 
 How to work:
 - Start with get_mistake_summary, then look at whatever else you need (openings, worst moves, \
 single positions). Each tool call costs time, so stop once the picture is clear.
-- A weakness must be a pattern (it repeats across moves or games), not a single bad move.
+- A weakness must be a pattern (it repeats across moves or games), not a single bad move. \
+If only one game is analysed, say that the patterns are tentative.
 - Back every weakness with evidence from the tool results: numbers and concrete moves with their \
-game ids. Do not invent games, moves or statistics.
+game ids. Use the moves exactly as the tools give them (e.g. best_move "Bxf7"); never convert or \
+invent moves, games or statistics.
 - Centipawn loss (cp_loss) is measured by Stockfish; motifs come from simple board rules, so \
 "unexplained" mistakes are possible.
-- If there is little data, say so and give fewer weaknesses.
-- Write for the player: clear, encouraging, no jargon without explanation.
 
+For each weakness, also give the cure:
+- how_to_improve: what to change in the player's thinking or habits, concretely.
+- exercises: 2-3 practical exercises the player can do away from the board or online.
+Then write a training plan that works on the weaknesses in priority order. Match the difficulty \
+to the player's rating when it is given.
+
+Write for the player: clear, encouraging, no jargon without explanation.
 When you are done, call submit_diagnosis exactly once. Do not write the diagnosis as plain text."""
 
 TOOLS = [
@@ -95,23 +106,24 @@ TOOLS = [
         "name": "explain_position",
         "description": (
             "Re-check one position with the tactical pattern rules: which motifs explain why the "
-            "played move was worse than the best move. Moves are in UCI format, e.g. e2e4."
+            "played move was worse than the best move. Give the moves in normal notation "
+            "exactly as get_worst_moves returned them, e.g. played 'Qxf7+' and best 'Bxf7'."
         ),
         "strict": True,
         "input_schema": {
             "type": "object",
             "properties": {
                 "fen_before": {"type": "string"},
-                "played_uci": {"type": "string"},
-                "best_uci": {"type": "string"},
+                "played_move": {"type": "string"},
+                "best_move": {"type": "string"},
             },
-            "required": ["fen_before", "played_uci", "best_uci"],
+            "required": ["fen_before", "played_move", "best_move"],
             "additionalProperties": False,
         },
     },
     {
         "name": "submit_diagnosis",
-        "description": "Submit the final diagnosis. Call this once, at the end.",
+        "description": "Submit the final diagnosis and training plan. Call this once, at the end.",
         "strict": True,
         "input_schema": {
             "type": "object",
@@ -129,13 +141,46 @@ TOOLS = [
                             "evidence": {"type": "string", "description": "Numbers and example moves from the tools."},
                             "example_game_ids": {"type": "array", "items": {"type": "integer"}},
                             "priority": {"type": "integer", "description": "1 = work on this first, 3 = least urgent."},
+                            "how_to_improve": {"type": "string", "description": "Concrete change of habit or thinking."},
+                            "exercises": {
+                                "type": "array",
+                                "description": "2-3 practical exercises.",
+                                "items": {"type": "string"},
+                            },
                         },
-                        "required": ["title", "category", "explanation", "evidence", "example_game_ids", "priority"],
+                        "required": [
+                            "title", "category", "explanation", "evidence", "example_game_ids",
+                            "priority", "how_to_improve", "exercises",
+                        ],
                         "additionalProperties": False,
                     },
                 },
+                "training_plan": {
+                    "type": "object",
+                    "properties": {
+                        "overview": {"type": "string", "description": "1-3 sentences: the idea of the plan."},
+                        "days": {"type": "integer", "description": f"Length of the plan, 1 to {MAX_PLAN_DAYS}."},
+                        "tasks": {
+                            "type": "array",
+                            "description": "One or more tasks per day.",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "day": {"type": "integer"},
+                                    "focus": {"type": "string", "description": "Which weakness this works on."},
+                                    "activity": {"type": "string", "description": "What to do, concretely."},
+                                    "minutes": {"type": "integer"},
+                                },
+                                "required": ["day", "focus", "activity", "minutes"],
+                                "additionalProperties": False,
+                            },
+                        },
+                    },
+                    "required": ["overview", "days", "tasks"],
+                    "additionalProperties": False,
+                },
             },
-            "required": ["summary", "weaknesses"],
+            "required": ["summary", "weaknesses", "training_plan"],
             "additionalProperties": False,
         },
     },
@@ -162,6 +207,8 @@ class DiagnosisResult:
     weaknesses: list[dict]
     model: str
     turns: int
+    # {"overview": str, "days": int, "tasks": [{"day", "focus", "activity", "minutes"}]}
+    training_plan: dict = field(default_factory=dict)
     tool_calls: list[ToolCall] = field(default_factory=list)
     input_tokens: int = 0
     output_tokens: int = 0
@@ -186,13 +233,16 @@ class _Toolbox:
             return worst_moves(self.records, limit=limit, motif=args.get("motif", ""), phase=args.get("phase", ""))
         if name == "explain_position":
             try:
-                return {"motifs": detect_motifs(args["fen_before"], args["played_uci"], args.get("best_uci", ""))}
+                board = chess.Board(args["fen_before"])
+                played = board.parse_san(args["played_move"]).uci()
+                best = board.parse_san(args["best_move"]).uci() if args.get("best_move") else ""
+                return {"motifs": detect_motifs(args["fen_before"], played, best)}
             except (KeyError, ValueError) as exc:
                 raise ValueError(f"Invalid position or move: {exc}") from exc
         raise ValueError(f"Unknown tool: {name}")
 
-    def check_diagnosis(self, args: dict) -> list[dict]:
-        """Validates submit_diagnosis input and returns the cleaned weaknesses."""
+    def check_diagnosis(self, args: dict) -> tuple[list[dict], dict]:
+        """Validates submit_diagnosis input; returns the cleaned weaknesses and training plan."""
         weaknesses = args.get("weaknesses") or []
         if not args.get("summary") or not weaknesses:
             raise ValueError("Give a summary and at least one weakness.")
@@ -206,13 +256,26 @@ class _Toolbox:
                 )
             if weakness.get("category") not in CATEGORIES:
                 raise ValueError(f"Unknown category: {weakness.get('category')}")
+            if not weakness.get("how_to_improve") or not weakness.get("exercises"):
+                raise ValueError(f"Weakness '{weakness.get('title')}' needs how_to_improve and exercises.")
             cleaned.append({**weakness, "priority": min(max(1, int(weakness.get("priority", 2))), 3)})
-        return sorted(cleaned, key=lambda w: w["priority"])
+
+        plan = args.get("training_plan") or {}
+        days = int(plan.get("days", 0))
+        tasks = plan.get("tasks") or []
+        if not plan.get("overview") or not tasks or not 1 <= days <= MAX_PLAN_DAYS:
+            raise ValueError(
+                f"The training plan needs an overview, 1 to {MAX_PLAN_DAYS} days and at least one task."
+            )
+        if any(not 1 <= int(task.get("day", 0)) <= days for task in tasks):
+            raise ValueError(f"Every task's day must be between 1 and {days}.")
+        plan = {**plan, "tasks": sorted(tasks, key=lambda task: int(task["day"]))}
+        return sorted(cleaned, key=lambda w: w["priority"]), plan
 
 
 def _player_prompt(records: list[MoveRecord], player: dict | None) -> str:
     player = player or {}
-    lines = ["Diagnose this player's recurring weaknesses."]
+    lines = ["Diagnose this player's recurring weaknesses and write a training plan to fix them."]
     if player.get("name"):
         lines.append(f"Player: {player['name']}")
     if player.get("rating"):
@@ -294,10 +357,11 @@ class DiagnosisAgent:
                 is_error = False
                 try:
                     if block.name == "submit_diagnosis":
-                        weaknesses = toolbox.check_diagnosis(block.input)
+                        weaknesses, plan = toolbox.check_diagnosis(block.input)
                         result.tool_calls.append(ToolCall(block.name, block.input, time.perf_counter() - tool_started))
                         result.summary = block.input["summary"]
                         result.weaknesses = weaknesses
+                        result.training_plan = plan
                         result.seconds = time.perf_counter() - started
                         return result
                     content = json.dumps(toolbox.run(block.name, block.input))

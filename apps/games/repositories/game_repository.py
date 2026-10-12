@@ -43,6 +43,16 @@ def list_games_for_coaching(user):
     """Analysed games where we know which side the user played."""
     return Game.objects.filter(user=user, status=Game.Status.DONE).exclude(user_color="")
 
+def get_ready_games(user, game_ids):
+    """The subset of game_ids that belong to the user and are ready for coaching."""
+    return list_games_for_coaching(user).filter(pk__in=game_ids)
+
+
+def delete_game(game: Game) -> None:
+    # Deletes its moves and mistakes too (on_delete=CASCADE).
+    game.delete()
+
+
 
 def list_user_moves(games):
     """The user's own moves in these games (not the opponent's), in game order."""

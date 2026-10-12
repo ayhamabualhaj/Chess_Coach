@@ -8,6 +8,8 @@ AI model as JSON.
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 
+import chess
+
 SEVERITIES = ("inaccuracy", "mistake", "blunder")
 PHASES = ("opening", "middlegame", "endgame")
 
@@ -86,6 +88,16 @@ def opening_breakdown(records: list[MoveRecord], min_games: int = 1) -> list[dic
         })
     return sorted(rows, key=lambda row: row["avg_cp_loss"] or 0, reverse=True)
 
+def _best_move_san(fen_before: str, best_uci: str) -> str:
+    """The engine's best move in normal notation (e.g. "Bxf7"), so the AI never has to translate it."""
+    if not best_uci:
+        return ""
+    try:
+        board = chess.Board(fen_before)
+        return board.san(chess.Move.from_uci(best_uci))
+    except ValueError:
+        return ""
+
 
 def worst_moves(records: list[MoveRecord], limit: int = 5, motif: str = "", phase: str = "") -> list[dict]:
     """The costliest mistakes, as concrete evidence (with the position as FEN)."""
@@ -102,7 +114,7 @@ def worst_moves(records: list[MoveRecord], limit: int = 5, motif: str = "", phas
             "phase": r.phase,
             "motif": r.motif,
             "cp_loss": r.cp_loss,
-            "best_move_uci": r.best_move_uci,
+            "best_move": _best_move_san(r.fen_before, r.best_move_uci),
             "fen_before": r.fen_before,
         }
         for r in candidates[:limit]
