@@ -151,3 +151,6 @@ MESSAGE_TAGS = {message_constants.ERROR: "danger"}
 
 # Chess engine
 STOCKFISH_PATH = os.getenv("STOCKFISH_PATH", "/usr/bin/stockfish")
+
+# Search depth per position: higher is stronger but slower.
+STOCKFISH_DEPTH = int(os.getenv("STOCKFISH_DEPTH", "12"))
