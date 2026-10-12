@@ -164,7 +164,7 @@ TASKS = {
         "QUEUES": ["default"],
     }
 }
-ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-opus-5-5")
+ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-haiku-5-5")
 
 
 
