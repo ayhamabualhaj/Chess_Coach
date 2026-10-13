@@ -3,6 +3,7 @@
 Pure Python: no Django imports, so it can be used and tested on its own.
 """
 from dataclasses import dataclass
+from pathlib import Path
 
 import chess
 import chess.engine
@@ -56,6 +57,23 @@ class StockfishEngine:
 
     def __exit__(self, exc_type, exc, tb):
         self.close()
+
+    def peak_memory_mb(self) -> float | None:
+        """The most memory (RAM) the Stockfish process has used so far, in MB.
+
+        Read from Linux's /proc/<pid>/status ("VmHWM" = peak resident memory);
+        None on other systems or when the engine is not running.
+        """
+        if self._engine is None:
+            return None
+        try:
+            status = Path(f"/proc/{self._engine.transport.get_pid()}/status").read_text()
+        except OSError:
+            return None
+        for line in status.splitlines():
+            if line.startswith("VmHWM:"):
+                return round(int(line.split()[1]) / 1024, 1)  # the value is in kB
+        return None
 
     def evaluate(self, board: chess.Board) -> PositionEval:
         return self._analyse(board)

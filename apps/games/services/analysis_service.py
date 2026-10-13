@@ -40,7 +40,7 @@ def analyse_game(game_id: int, depth: int | None = None) -> dict:
 
     game_repository.set_status(game, Game.Status.RUNNING)
     try:
-        move_rows, mistake_rows = _evaluate_moves(parsed, depth or settings.STOCKFISH_DEPTH)
+        move_rows, mistake_rows = evaluate_moves(parsed, depth or settings.STOCKFISH_DEPTH)
         analysis_repository.replace_analysis(game, move_rows, mistake_rows)
     except EngineNotFoundError as e:
         message = "The chess engine is not available. Check STOCKFISH_PATH."
@@ -54,8 +54,17 @@ def analyse_game(game_id: int, depth: int | None = None) -> dict:
     return {"moves": len(move_rows), "mistakes": len(mistake_rows)}
 
 
-def _evaluate_moves(parsed_game, depth: int) -> tuple[list[dict], list[dict]]:
+def evaluate_moves(
+    parsed_game, depth: int, check_great: bool = True, stats: dict | None = None
+) -> tuple[list[dict], list[dict]]:
+    """Evaluate every move of a parsed game; returns (move_rows, mistake_rows).
+
+    Used by analyse_game and by the evaluation script (evaluation/), which can turn
+    off the Great check to measure its cost and passes `stats` to receive
+    "engine_peak_mb" (Stockfish's peak memory) and "great_checks" (extra searches).
+    """
     move_rows, mistake_rows = [], []
+    great_checks = 0
     board = parsed_game.board()
     previous_label = None  # Lichess label of the opponent's last move, for "Miss"
 
@@ -81,7 +90,8 @@ def _evaluate_moves(parsed_game, depth: int) -> tuple[list[dict], list[dict]]:
             # Great needs a second search: is every other move clearly worse?
             # Only done when the player found the best move, so it costs little.
             second_best = None
-            if should_check_great(board, move, _to_score(before), played_best, ply):
+            if check_great and should_check_great(board, move, _to_score(before), played_best, ply):
+                great_checks += 1
                 if checker is None:
                     checker = engines.enter_context(StockfishEngine(settings.STOCKFISH_PATH, depth=depth))
                 alternative = checker.evaluate_without(board, move)
@@ -132,5 +142,11 @@ def _evaluate_moves(parsed_game, depth: int) -> tuple[list[dict], list[dict]]:
                 break
             before = after
             previous_label = label
+
+        if stats is not None:
+            # Both engine processes run at the same time, so their peaks add up.
+            peaks = [e.peak_memory_mb() for e in (engine, checker) if e is not None]
+            stats["engine_peak_mb"] = round(sum(peaks), 1) if peaks and None not in peaks else None
+            stats["great_checks"] = great_checks
 
     return move_rows, mistake_rows
