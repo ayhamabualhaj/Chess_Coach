@@ -1,17 +1,60 @@
-from django.db.models import F
+from django.db.models import Count, F, Q
 
 from apps.games.models import Game, Move
 
+IN_PROGRESS = (Game.Status.QUEUED, Game.Status.RUNNING)
 
-def create_game(user, pgn: str, white: str = "", black: str = "", result: str = "",
-                user_color: str = "") -> Game:
-    return Game.objects.create(
-        user=user, pgn=pgn, white=white, black=black, result=result, user_color=user_color
+# Filters for the games list: name -> condition.
+GAME_FILTERS = {
+    "all": Q(),
+    "todo": ~Q(status=Game.Status.DONE),
+    "done": Q(status=Game.Status.DONE),
+    "side": Q(user_color=""),
+}
+
+
+def create_games(user, rows: list[dict]) -> list[Game]:
+    """Save many games in one query. The first game of the file is saved last,
+    so it is the newest and shows at the top of the list (PGN exports from
+    Lichess and Chess.com put the most recent game first)."""
+    games = Game.objects.bulk_create(Game(user=user, **row) for row in reversed(rows))
+    return list(reversed(games))
+
+
+def get_fingerprints(user) -> set[str]:
+    return set(Game.objects.filter(user=user).exclude(fingerprint="").values_list("fingerprint", flat=True))
+
+
+def list_games_for_user(user, show: str = "all"):
+    return Game.objects.filter(user=user).filter(GAME_FILTERS.get(show, Q()))
+
+
+def count_games_by_filter(user) -> dict:
+    return Game.objects.filter(user=user).aggregate(
+        **{name: Count("pk", filter=condition) for name, condition in GAME_FILTERS.items()}
     )
 
 
-def list_games_for_user(user):
-    return Game.objects.filter(user=user)
+def count_in_progress(user) -> int:
+    return Game.objects.filter(user=user, status__in=IN_PROGRESS).count()
+
+
+def list_games_to_analyse(user, limit: int):
+    """Games that have never been analysed successfully, oldest upload first."""
+    return list(
+        Game.objects.filter(user=user, status__in=[Game.Status.PENDING, Game.Status.FAILED])
+        .order_by("created_at", "pk")[:limit]
+    )
+
+
+def count_games_to_analyse(user) -> int:
+    return Game.objects.filter(user=user, status__in=[Game.Status.PENDING, Game.Status.FAILED]).count()
+
+
+def delete_games(user, game_ids) -> int:
+    """Delete the user's games with these ids; returns how many were deleted."""
+    deleted, per_model = Game.objects.filter(user=user, pk__in=game_ids).delete()
+    return per_model.get("games.Game", 0)
 
 
 def get_game(game_id: int) -> Game:
@@ -43,6 +86,7 @@ def list_games_for_coaching(user):
     """Analysed games where we know which side the user played."""
     return Game.objects.filter(user=user, status=Game.Status.DONE).exclude(user_color="")
 
+
 def get_ready_games(user, game_ids):
     """The subset of game_ids that belong to the user and are ready for coaching."""
     return list_games_for_coaching(user).filter(pk__in=game_ids)
@@ -51,7 +95,6 @@ def get_ready_games(user, game_ids):
 def delete_game(game: Game) -> None:
     # Deletes its moves and mistakes too (on_delete=CASCADE).
     game.delete()
-
 
 
 def list_user_moves(games):

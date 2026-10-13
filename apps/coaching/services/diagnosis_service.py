@@ -40,7 +40,8 @@ def build_move_records(user, games=None) -> list[MoveRecord]:
     if games is None:
         games = game_repository.list_games_for_coaching(user)
     games = list(games)
-    openings = {game.pk: _opening_of(game) for game in games}
+    # Games uploaded since step 14 store their opening; older ones are read from the PGN.
+    openings = {game.pk: game.opening or _opening_of(game) for game in games}
 
     records = []
     for move in game_repository.list_user_moves(games):
@@ -59,6 +60,7 @@ def build_move_records(user, games=None) -> list[MoveRecord]:
             motif=mistake.motif if mistake else "",
             opening=openings[move.game_id],
             best_move_uci=move.best_move_uci,
+            label=move.label,
         ))
     return records
 

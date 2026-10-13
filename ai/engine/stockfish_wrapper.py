@@ -58,10 +58,21 @@ class StockfishEngine:
         self.close()
 
     def evaluate(self, board: chess.Board) -> PositionEval:
+        return self._analyse(board)
+
+    def evaluate_without(self, board: chess.Board, excluded: chess.Move) -> PositionEval | None:
+        """The evaluation if `excluded` were not allowed: the best of all other moves.
+        Used to see whether the best move was the only good one. None if there is no other move."""
+        others = [move for move in board.legal_moves if move != excluded]
+        if not others:
+            return None
+        return self._analyse(board, root_moves=others)
+
+    def _analyse(self, board: chess.Board, root_moves=None) -> PositionEval:
         if self._engine is None:
             raise RuntimeError("Engine is not open; use 'with StockfishEngine(...)'.")
 
-        info = self._engine.analyse(board, chess.engine.Limit(depth=self.depth))
+        info = self._engine.analyse(board, chess.engine.Limit(depth=self.depth), root_moves=root_moves)
         score = info["score"].white()
         pv = info.get("pv") or []
         return PositionEval(

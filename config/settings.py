@@ -156,6 +156,9 @@ STOCKFISH_PATH = os.getenv("STOCKFISH_PATH", "/usr/bin/stockfish")
 # Search depth per position: higher is stronger but slower.
 STOCKFISH_DEPTH = int(os.getenv("STOCKFISH_DEPTH", "12"))
 
+# How many games one user may have waiting for analysis at the same time.
+MAX_ANALYSIS_QUEUE = int(os.getenv("MAX_ANALYSIS_QUEUE", "10"))
+
 # Background tasks (Django's built-in Tasks framework).
 # Tasks are stored in PostgreSQL and run by: python manage.py db_worker
 TASKS = {

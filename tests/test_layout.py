@@ -27,4 +27,4 @@ class BaseLayoutTests(TestCase):
     def test_upload_shows_success_message(self):
         self.client.login(username="tester", password="pass12345")
         response = self.client.post(reverse("upload_game"), {"pgn": VALID_PGN}, follow=True)
-        self.assertContains(response, "Game uploaded successfully.")
+        self.assertContains(response, "Uploaded 1 game.")

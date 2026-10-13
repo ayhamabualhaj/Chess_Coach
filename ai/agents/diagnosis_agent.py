@@ -50,6 +50,8 @@ game ids. Use the moves exactly as the tools give them (e.g. best_move "Bxf7"); 
 invent moves, games or statistics.
 - Centipawn loss (cp_loss) is measured by Stockfish; motifs come from simple board rules, so \
 "unexplained" mistakes are possible.
+- get_mistake_summary also counts move types (brilliant, great, best, excellent, good, miss, ...). \
+In the summary, name one real strength when these numbers show one (e.g. several great moves).
 
 For each weakness, also give the cure:
 - how_to_improve: what to change in the player's thinking or habits, concretely.
@@ -65,7 +67,8 @@ TOOLS = [
         "name": "get_mistake_summary",
         "description": (
             "Overall statistics for the player: number of games and moves, average centipawn loss, "
-            "mistakes by severity, by game phase (opening/middlegame/endgame) and by tactical motif."
+            "mistakes by severity, by game phase (opening/middlegame/endgame) and by tactical motif, "
+            "and how many moves of each type (brilliant, great, best, excellent, good, miss, ...)."
         ),
         "strict": True,
         "input_schema": {"type": "object", "properties": {}, "required": [], "additionalProperties": False},

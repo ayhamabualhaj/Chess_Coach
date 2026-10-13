@@ -1,27 +1,36 @@
 {% extends "base.html" %}
 
-{% block title %}Upload a game{% endblock %}
+{% block title %}Upload games{% endblock %}
 
 {% block content %}
-<h1 class="h3 mb-3">Upload a game</h1>
+<h1 class="h3 mb-3">Upload games</h1>
 <p class="text-body-secondary">
-  Paste a game in PGN format. You can export PGN from Lichess, Chess.com or any chess program.
+  Choose a <code>.pgn</code> file or paste PGN text. One file can hold many games, for example an export of
+  your games from Lichess or Chess.com. Games you have already uploaded are skipped.
 </p>
 
 {% if error %}
   <div class="alert alert-danger">{{ error }}</div>
 {% endif %}
 
-<form method="post" class="form-stack">
+<form method="post" enctype="multipart/form-data" class="form-stack">
   {% csrf_token %}
-  <textarea name="pgn" rows="15" class="pgn-input mb-3"
-            placeholder='[Event "Casual game"]&#10;&#10;1. e4 e5 2. Nf3 Nc6 ...'>{{ pgn }}</textarea>
+  <div class="mb-3">
+    <label for="pgn_file" class="form-label">PGN file</label>
+    <input type="file" name="pgn_file" id="pgn_file" accept=".pgn,.txt" class="form-control w-auto">
+    <div class="form-text">Up to 5 MB, which is thousands of games.</div>
+  </div>
+  <div class="mb-3">
+    <label for="pgn" class="form-label">…or paste PGN text</label>
+    <textarea name="pgn" id="pgn" rows="12" class="pgn-input"
+              placeholder='[Event "Casual game"]&#10;&#10;1. e4 e5 2. Nf3 Nc6 ...'>{{ pgn }}</textarea>
+  </div>
   <div class="mb-3">
     <label for="played_as" class="form-label">Which side did you play?</label>
     <select name="played_as" id="played_as" class="form-select w-auto">
-      <option value="auto" {% if played_as == "auto" or not played_as %}selected{% endif %}>Detect from my username</option>
-      <option value="white" {% if played_as == "white" %}selected{% endif %}>White</option>
-      <option value="black" {% if played_as == "black" %}selected{% endif %}>Black</option>
+      <option value="auto" {% if played_as == "auto" or not played_as %}selected{% endif %}>Detect from my username (per game)</option>
+      <option value="white" {% if played_as == "white" %}selected{% endif %}>White in every game</option>
+      <option value="black" {% if played_as == "black" %}selected{% endif %}>Black in every game</option>
     </select>
     <div class="form-text">The coach only looks at your own moves, so it needs to know your colour.</div>
   </div>

@@ -6,6 +6,19 @@ class Move(models.Model):
         WHITE = "white", "White"
         BLACK = "black", "Black"
 
+    class Label(models.TextChoices):
+        """Chess.com-style move types, best first (see ai/engine/move_types.py)."""
+
+        BRILLIANT = "brilliant", "Brilliant"
+        GREAT = "great", "Great"
+        BEST = "best", "Best"
+        EXCELLENT = "excellent", "Excellent"
+        GOOD = "good", "Good"
+        MISS = "miss", "Miss"
+        INACCURACY = "inaccuracy", "Inaccuracy"
+        MISTAKE = "mistake", "Mistake"
+        BLUNDER = "blunder", "Blunder"
+
     game = models.ForeignKey(
         "games.Game",
         on_delete=models.CASCADE,
@@ -25,6 +38,8 @@ class Move(models.Model):
     best_move_uci = models.CharField(max_length=5, blank=True)
     # How much worse the played move was than the best move, for the mover.
     cp_loss = models.PositiveIntegerField(null=True, blank=True)
+    # Move type shown on the game page; empty for games analysed before it existed.
+    label = models.CharField(max_length=10, choices=Label.choices, blank=True)
 
     class Meta:
         ordering = ["game", "ply"]

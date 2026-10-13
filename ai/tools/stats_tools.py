@@ -11,6 +11,8 @@ from dataclasses import dataclass
 import chess
 
 SEVERITIES = ("inaccuracy", "mistake", "blunder")
+# Chess.com-style move types (see ai/engine/move_types.py), best first.
+MOVE_TYPES = ("brilliant", "great", "best", "excellent", "good", "miss", "inaccuracy", "mistake", "blunder")
 PHASES = ("opening", "middlegame", "endgame")
 
 
@@ -28,6 +30,7 @@ class MoveRecord:
     motif: str = ""
     opening: str = ""
     best_move_uci: str = ""
+    label: str = ""  # move type, e.g. "great"; "" for games analysed before move types existed
 
 
 def _average(values) -> float | None:
@@ -64,6 +67,8 @@ def summarize_mistakes(records: list[MoveRecord]) -> dict:
         "by_phase": by_phase,
         "by_motif": dict(motif_counts.most_common()),
         "unexplained_mistakes": sum(1 for r in labelled if not r.motif),
+        # Good moves too, so the coach can say what the player does well.
+        "move_types": {t: sum(1 for r in records if r.label == t) for t in MOVE_TYPES},
     }
 
 

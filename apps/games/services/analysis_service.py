@@ -1,10 +1,15 @@
 import io
+from contextlib import ExitStack
 
 import chess
 import chess.pgn
 from django.conf import settings
 
-from ai.engine import EngineNotFoundError, Score, StockfishEngine, centipawn_loss, classify_move, game_phase
+from ai.engine import (
+    EngineNotFoundError, Score, StockfishEngine, centipawn_loss, classify_move, game_phase,
+    is_sacrifice, move_type, should_check_great,
+)
+from ai.engine.move_types import BEST
 from ai.engine.stockfish_wrapper import MATE_SCORE
 from ai.tools import engine_mate_motif, primary_motif
 from apps.games.models import Game
@@ -52,8 +57,15 @@ def analyse_game(game_id: int, depth: int | None = None) -> dict:
 def _evaluate_moves(parsed_game, depth: int) -> tuple[list[dict], list[dict]]:
     move_rows, mistake_rows = [], []
     board = parsed_game.board()
+    previous_label = None  # Lichess label of the opponent's last move, for "Miss"
 
-    with StockfishEngine(settings.STOCKFISH_PATH, depth=depth) as engine:
+    with ExitStack() as engines:
+        engine = engines.enter_context(StockfishEngine(settings.STOCKFISH_PATH, depth=depth))
+        # A second engine, started only when needed, for the "was it the only good
+        # move?" search. Using the main engine for it would change what that engine
+        # remembers (its hash table) and so, slightly, the evaluations of later moves.
+        checker = None
+
         # Each position is evaluated once: the "after" of one move is the
         # "before" of the next.
         before = engine.evaluate(board)
@@ -63,18 +75,34 @@ def _evaluate_moves(parsed_game, depth: int) -> tuple[list[dict], list[dict]]:
             fen_before = board.fen()
             san = board.san(move)
             phase = game_phase(board, ply)
+            played_best = before.best_move == move
+            sacrifice = is_sacrifice(board, move)
+
+            # Great needs a second search: is every other move clearly worse?
+            # Only done when the player found the best move, so it costs little.
+            second_best = None
+            if should_check_great(board, move, _to_score(before), played_best, ply):
+                if checker is None:
+                    checker = engines.enter_context(StockfishEngine(settings.STOCKFISH_PATH, depth=depth))
+                alternative = checker.evaluate_without(board, move)
+                second_best = _to_score(alternative) if alternative else None
 
             board.push(move)
             if board.is_checkmate():
                 # The mover just won; nothing to evaluate and nothing to criticise.
                 after = None
                 eval_after = MATE_SCORE if mover_is_white else -MATE_SCORE
-                cp_loss, label = 0, None
+                cp_loss, label, kind = 0, None, BEST
             else:
                 after = engine.evaluate(board)
                 eval_after = after.cp
                 cp_loss = centipawn_loss(_to_score(before), _to_score(after), mover_is_white)
                 label = classify_move(_to_score(before), _to_score(after), mover_is_white)
+                kind = move_type(
+                    _to_score(before), _to_score(after), mover_is_white, played_best,
+                    severity=label, opponent_severity=previous_label,
+                    sacrifice=sacrifice, second_best=second_best,
+                )
 
             move_rows.append({
                 "ply": ply,
@@ -86,6 +114,7 @@ def _evaluate_moves(parsed_game, depth: int) -> tuple[list[dict], list[dict]]:
                 "eval_after": eval_after,
                 "best_move_uci": before.best_move.uci() if before.best_move else "",
                 "cp_loss": cp_loss,
+                "label": kind,
             })
             if label:
                 best_uci = before.best_move.uci() if before.best_move else ""
@@ -102,5 +131,6 @@ def _evaluate_moves(parsed_game, depth: int) -> tuple[list[dict], list[dict]]:
             if after is None:
                 break
             before = after
+            previous_label = label
 
     return move_rows, mistake_rows

@@ -12,11 +12,11 @@ class PgnHeaderTests(TestCase):
         self.user = get_user_model().objects.create_user("tester", password="pass12345")
 
     def test_headers_are_saved(self):
-        game = import_pgn(self.user, VALID_PGN)
+        game = import_pgn(self.user, VALID_PGN).games[0]
         self.assertEqual((game.white, game.black, game.result), ("Alice", "Bob", "1-0"))
 
     def test_unknown_headers_are_stored_empty(self):
-        game = import_pgn(self.user, '[White "?"]\n[Result "*"]\n\n1. e4 e5 *')
+        game = import_pgn(self.user, '[White "?"]\n[Result "*"]\n\n1. e4 e5 *').games[0]
         self.assertEqual((game.white, game.black, game.result), ("", "", ""))
 
 

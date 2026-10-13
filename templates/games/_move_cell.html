@@ -1,7 +1,12 @@
-<td class="{% if cell.mistake %}cell-{{ cell.mistake.severity }}{% endif %}">  {% if cell %}
+<td class="{% if cell.mistake %}cell-{{ cell.mistake.severity }}{% endif %}">
+  {% if cell %}
     <span class="fw-semibold">{{ cell.san }}</span>
-    {% if cell.mistake %}
+    {% if cell.label %}
+      <span class="move-label label-{{ cell.label }}" title="{{ cell.label_name }}">{{ cell.symbol }}{% if cell.mistake or cell.label == "brilliant" or cell.label == "great" %} {{ cell.label_name }}{% endif %}</span>
+    {% elif cell.mistake %}
       <span class="badge {% if cell.mistake.severity == 'blunder' %}text-bg-danger{% elif cell.mistake.severity == 'mistake' %}text-bg-warning{% else %}text-bg-secondary{% endif %}">{{ cell.mistake.get_severity_display }}</span>
+    {% endif %}
+    {% if cell.mistake %}
       <div class="small text-body-secondary">
         −{{ cell.cp_loss }} cp{% if cell.best_san %} · best was <strong>{{ cell.best_san }}</strong>{% endif %}
       </div>

@@ -59,6 +59,13 @@
     This game has not been analysed yet. Click <strong>Analyse with Stockfish</strong> to start.
   </div>
 {% elif rows %}
+  {% if not has_labels %}
+    <div class="alert alert-secondary small">
+      This game was analysed before move types (Brilliant, Great, Best …) and accuracy were added.
+      Click <strong>Analyse again</strong> to see them.
+    </div>
+  {% endif %}
+
   <div class="row g-3 mb-4">
     {% for side, s in stats.items %}
       <div class="col-md-6">
@@ -66,13 +73,28 @@
           <div class="card-body">
             <h2 class="h6 text-body-secondary mb-3">
               {% if side == "white" %}White · {{ game.white|default:"?" }}{% else %}Black · {{ game.black|default:"?" }}{% endif %}
+              {% if side == game.user_color %}<span class="badge bg-body-secondary text-body border ms-1">You</span>{% endif %}
             </h2>
-            <div class="d-flex flex-wrap gap-4">
+            <div class="d-flex flex-wrap gap-4 mb-3">
+              {% if has_labels %}
+                <div><div class="fs-4 fw-semibold">{% if s.accuracy is not None %}{{ s.accuracy }}%{% else %}–{% endif %}</div><div class="small text-body-secondary">accuracy</div></div>
+              {% endif %}
               <div><div class="fs-4 fw-semibold">{{ s.avg_cp_loss|default_if_none:"–" }}</div><div class="small text-body-secondary">avg. centipawn loss</div></div>
               <div><div class="fs-4 fw-semibold text-warning-emphasis">{{ s.inaccuracy }}</div><div class="small text-body-secondary">inaccuracies</div></div>
               <div><div class="fs-4 fw-semibold text-warning">{{ s.mistake }}</div><div class="small text-body-secondary">mistakes</div></div>
               <div><div class="fs-4 fw-semibold text-danger">{{ s.blunder }}</div><div class="small text-body-secondary">blunders</div></div>
             </div>
+            {% if has_labels %}
+              <div class="label-counts">
+                {% for item in s.labels %}
+                  <div class="d-flex align-items-center gap-2 {% if not item.count %}opacity-50{% endif %}">
+                    <span class="move-label label-{{ item.label }}">{{ item.symbol }}</span>
+                    <span class="small me-auto">{{ item.name }}</span>
+                    <span class="fw-semibold">{{ item.count }}</span>
+                  </div>
+                {% endfor %}
+              </div>
+            {% endif %}
           </div>
         </div>
       </div>
@@ -104,6 +126,23 @@
       </table>
     </div>
   </div>
+
+  <details class="mb-4">
+    <summary class="text-body-secondary">What do the move types mean?</summary>
+    <ul class="list-unstyled small mt-2 mb-0 label-legend">
+      <li><span class="move-label label-brilliant">!!</span> <strong>Brilliant</strong>: a good piece sacrifice, played when you were not already winning easily.</li>
+      <li><span class="move-label label-great">!</span> <strong>Great</strong>: the only good move; every other move would have been at least a mistake.</li>
+      <li><span class="move-label label-best">★</span> <strong>Best</strong>: Stockfish's top move.</li>
+      <li><span class="move-label label-excellent">👍</span> <strong>Excellent</strong>: almost as good as the best move (loses at most 2% winning chance).</li>
+      <li><span class="move-label label-good">✓</span> <strong>Good</strong>: a little worse than the best move (loses at most 5%).</li>
+      <li><span class="move-label label-miss">✗</span> <strong>Miss</strong>: your opponent had just made a mistake and you did not punish it. It still counts in the inaccuracy / mistake / blunder numbers above.</li>
+      <li><span class="move-label label-inaccuracy">?!</span> <strong>Inaccuracy</strong>, <span class="move-label label-mistake">?</span> <strong>Mistake</strong>, <span class="move-label label-blunder">??</span> <strong>Blunder</strong>: lose winning chances, using the same rules as Lichess.</li>
+    </ul>
+    <p class="small text-body-secondary mt-2 mb-0">
+      Based on Chess.com's published rules; their exact model is not public, so labels can differ a little.
+      Accuracy is calculated with Lichess's open-source formula.
+    </p>
+  </details>
 
   {{ chart|json_script:"chart-data" }}
 {% endif %}
