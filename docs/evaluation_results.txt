@@ -1,0 +1,23 @@
+Depth 12: 10 games, 924 moves
+  Latency : 41.9 s in total, 4.19 s per game, 48.8 ms per move
+  Memory  : Python peak 1.18 MB, Stockfish peak 751.1 MB
+  Great check costs 41.19% extra time on average
+  Accuracy: precision 0.667, recall 0.712, F1 0.689 (Lichess 118 labels, ours 126, both 84, same severity 57/84)
+  Confusion (rows = Lichess, columns = ours):
+                        none  inaccuracy     mistake     blunder
+            none         764          38           4           0
+      inaccuracy          24          28           3           0
+         mistake          10          13           6           3
+         blunder           0           3           5          23
+
+Depth 18: 10 games, 924 moves
+  Latency : 642.5 s in total, 64.25 s per game, 717.1 ms per move
+  Memory  : Python peak 1.39 MB, Stockfish peak 751.1 MB
+  Great check costs 25.24% extra time on average
+  Accuracy: precision 0.773, recall 0.78, F1 0.776 (Lichess 118 labels, ours 119, both 92, same severity 69/92)
+  Confusion (rows = Lichess, columns = ours):
+                        none  inaccuracy     mistake     blunder
+            none         779          25           2           0
+      inaccuracy          23          27           5           0
+         mistake           2          10          17           3
+         blunder           1           0           5          25
