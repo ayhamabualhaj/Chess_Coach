@@ -1,13 +1,14 @@
-"""Runs the diagnosis agent for one WeaknessReport (called from the background task)."""
+"""Runs the coaching flow for one WeaknessReport (called from the background task)."""
 import io
 
 import chess
 import chess.pgn
+from crewai import LLM
 from django.conf import settings
 
-from ai.agents.diagnosis_agent import DiagnosisAgent, DiagnosisError
 from ai.engine import game_phase
-from ai.tools import MoveRecord, build_practice, opening_label
+from ai.flows.coaching_flow import CoachingError, run_coaching
+from ai.tools import MoveRecord, opening_label
 from apps.accounts.repositories import account_repository
 from apps.coaching.models import WeaknessReport
 from apps.coaching.repositories import report_repository
@@ -15,9 +16,8 @@ from apps.games.models import Mistake
 from apps.games.repositories import game_repository
 
 
-def _make_agent() -> DiagnosisAgent:
-    # Tests replace this function with one that returns a fake agent.
-    return DiagnosisAgent(model=settings.ANTHROPIC_MODEL)
+def _make_llm():
+    return LLM(model=settings.AI_MODEL, api_key=settings.AI_API_KEY)
 
 
 def _opening_of(game) -> str:
@@ -69,9 +69,9 @@ def run_report(report_id: int) -> None:
     report = report_repository.get_report(report_id)
     report_repository.set_status(report, WeaknessReport.Status.RUNNING)
 
-    if not settings.ANTHROPIC_API_KEY:
+    if not settings.AI_API_KEY:
         report_repository.set_status(
-            report, WeaknessReport.Status.FAILED, "No ANTHROPIC_API_KEY found in .env."
+            report, WeaknessReport.Status.FAILED, "No AI_API_KEY found in .env."
         )
         return
 
@@ -85,8 +85,8 @@ def run_report(report_id: int) -> None:
     player = {"name": report.user.username, "rating": profile.rating if profile else None}
 
     try:
-        result = _make_agent().run(records, player=player)
-    except DiagnosisError as e:
+        result = run_coaching(records, _make_llm(), player=player)
+    except CoachingError as e:
         report_repository.set_status(report, WeaknessReport.Status.FAILED, str(e))
         return
     except Exception:
@@ -111,5 +111,4 @@ def run_report(report_id: int) -> None:
         output_tokens=result.output_tokens,
         seconds=round(result.seconds, 2),
     )
-    # The practice list comes from the mistakes themselves, not from the AI.
-    report_repository.save_training_plan(report, build_practice(records))
+    report_repository.save_training_plan(report, result.practice)

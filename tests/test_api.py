@@ -92,7 +92,7 @@ class StatusEndpointTests(ApiTestBase):
         self.assertEqual(APIClient().get(reverse("queue_status")).status_code, 401)
 
 
-@override_settings(TASKS=DUMMY_TASKS, ANTHROPIC_API_KEY="test-key")
+@override_settings(TASKS=DUMMY_TASKS, AI_API_KEY="test-key")
 class ReportApiTests(ApiTestBase):
     def test_create_list_and_detail(self):
         created = self.api.post(reverse("api_report_list"), {"games": [self.game.pk]}, format="json")

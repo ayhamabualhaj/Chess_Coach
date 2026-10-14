@@ -1,0 +1,30 @@
+diagnose_task:
+  description: >
+    Diagnose this player's recurring weaknesses and explain how to fix them.
+
+    Player: {player_name}
+    Rating: {rating}
+    Analysed: {games} games, {moves} of their moves.
+
+    How to work:
+    - Start with get_mistake_summary, then look at whatever else you need (openings,
+      worst moves, single positions). Each tool call costs time, so stop once the
+      picture is clear.
+    - A weakness must be a pattern (it repeats across moves or games), not a single bad
+      move. If only one game is analysed, say that the patterns are tentative.
+    - Back every weakness with evidence from the tool results: numbers and concrete moves
+      with their game ids. Use the moves exactly as the tools give them (e.g. best_move
+      "Bxf7"); never convert or invent moves, games or statistics.
+    - get_mistake_summary also counts move types (brilliant, great, best, ...). In the
+      summary, name one real strength when these numbers show one.
+
+    For each weakness, also give the cure:
+    - how_to_improve: what to change in the player's thinking or habits, concretely.
+    - exercises: 2-3 practical exercises or habits. The app already links puzzle sets for
+      each mistake type, so focus on other practice (reviewing own games, thinking
+      routines, slower games). Match the advice to the player's rating when it is known.
+  expected_output: >
+    A summary of 2-4 sentences about the player, and 2-4 weaknesses (most important
+    first), each with a title, category, explanation, evidence, the ids of example games,
+    a priority (1-3), how to improve and 2-3 exercises.
+  agent: chess_coach

@@ -183,5 +183,8 @@ REST_FRAMEWORK = {
     "PAGE_SIZE": 50,
 }
 
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-opus-5-5")
+AI_MODEL = os.getenv("AI_MODEL", "anthropic/claude-opus-5-5")
+AI_API_KEY = os.getenv("AI_API_KEY", "")
+
+os.environ.setdefault("CREWAI_DISABLE_TELEMETRY", "true")
+os.environ.setdefault("OTEL_SDK_DISABLED", "true")

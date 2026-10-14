@@ -1,15 +1,15 @@
-"""Coaching flow: building the agent's input, running a report, and the pages.
-The diagnosis agent is replaced by a fake, so no API key or network is needed."""
+"""Coaching: building the agent's input, running a report, and the pages.
+The AI model is replaced by a fake LLM, so no API key or network is needed."""
 from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from ai.agents.diagnosis_agent import DiagnosisError, DiagnosisResult, ToolCall
 from apps.coaching.models import TrainingPlan, WeaknessReport
 from apps.coaching.services import diagnosis_service
 from apps.games.models import Game, Mistake, Move
+from tests.fake_llm import FakeLLM, final_answer, use_tool, weakness
 
 User = get_user_model()
 IMMEDIATE_TASKS = {"default": {"BACKEND": "django.tasks.backends.immediate.ImmediateBackend"}}
@@ -21,29 +21,8 @@ AFTER_E4 = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1"
 AFTER_D5 = "rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2"
 
 
-class FakeAgent:
-    def __init__(self, error=None):
-        self.error = error
-        self.records = None
-
-    def run(self, records, player=None):
-        self.records, self.player = records, player
-        if self.error:
-            raise self.error
-        game_id = records[0].game_id
-        return DiagnosisResult(
-            summary="You leave your queen where it can be taken.",
-            weaknesses=[{
-                "title": "Hanging pieces", "category": "tactics",
-                "explanation": "Pieces are left undefended.", "evidence": "2. Qg4 lost the queen.",
-                "example_game_ids": [game_id], "priority": 1,
-                "how_to_improve": "Check every attacked piece before you move.",
-                "exercises": ["10 hanging-piece puzzles a day"],
-            }],
-            model="claude-haiku-5-5", turns=3,
-            tool_calls=[ToolCall("get_mistake_summary", {}, 0.01), ToolCall("submit_diagnosis", {}, 0.0)],
-            input_tokens=1200, output_tokens=300, seconds=4.2,
-        )
+def fake_llm(*replies) -> FakeLLM:
+    return FakeLLM(model="fake/coach", replies=list(replies))
 
 
 class CoachingTestBase(TestCase):
@@ -84,17 +63,18 @@ class BuildMoveRecordsTests(CoachingTestBase):
         self.assertEqual(diagnosis_service.build_move_records(self.user), [])
 
 
-@override_settings(TASKS=IMMEDIATE_TASKS, ANTHROPIC_API_KEY="test-key")
+@override_settings(TASKS=IMMEDIATE_TASKS, AI_API_KEY="test-key")
 class ReportFlowTests(CoachingTestBase):
     def test_new_report_runs_the_agent_and_shows_the_result(self):
-        agent = FakeAgent()
-        with mock.patch.object(diagnosis_service, "_make_agent", return_value=agent):
+        llm = fake_llm(use_tool("get_mistake_summary"), final_answer(weakness(self.game.pk)))
+        with mock.patch.object(diagnosis_service, "_make_llm", return_value=llm):
             response = self.client.post(reverse("create_report"), self.choose(), follow=True)
 
         report = WeaknessReport.objects.get()
         self.assertEqual(report.status, WeaknessReport.Status.DONE)
-        self.assertEqual((report.games_count, report.moves_count, report.turns), (1, 2, 3))
-        self.assertEqual(agent.player, {"name": "tester", "rating": None})
+        self.assertEqual((report.games_count, report.moves_count, report.turns), (1, 2, 2))
+        self.assertEqual((report.ai_model, report.input_tokens, report.output_tokens), ("fake/coach", 200, 40))
+        self.assertIn("Player: tester", str(llm.prompts[0]))
         self.assertRedirects(response, reverse("report_detail", args=[report.pk]))
         self.assertContains(response, "Hanging pieces")
         self.assertContains(response, reverse("game_detail", args=[self.game.pk]))
@@ -110,24 +90,24 @@ class ReportFlowTests(CoachingTestBase):
         self.assertContains(response, "3 × Hanging pieces puzzles")
 
     def test_agent_error_is_shown_on_the_report(self):
-        agent = FakeAgent(error=DiagnosisError("The AI model declined this request."))
-        with mock.patch.object(diagnosis_service, "_make_agent", return_value=agent):
+        llm = fake_llm(RuntimeError("The AI service is overloaded."))
+        with mock.patch.object(diagnosis_service, "_make_llm", return_value=llm):
             response = self.client.post(reverse("create_report"), self.choose(), follow=True)
         self.assertEqual(WeaknessReport.objects.get().status, WeaknessReport.Status.FAILED)
         self.assertEqual(TrainingPlan.objects.count(), 0)
-        self.assertContains(response, "declined this request")
+        self.assertContains(response, "could not finish the report")
 
-    @override_settings(ANTHROPIC_API_KEY="")
+    @override_settings(AI_API_KEY="")
     def test_missing_api_key_fails_with_a_clear_message(self):
         response = self.client.post(reverse("create_report"), self.choose(), follow=True)
-        self.assertContains(response, "No ANTHROPIC_API_KEY")
+        self.assertContains(response, "No AI_API_KEY")
 
     def test_only_the_chosen_games_are_studied(self):
         other = Game.objects.create(user=self.user, pgn=PGN, status=Game.Status.DONE, user_color="black")
-        agent = FakeAgent()
-        with mock.patch.object(diagnosis_service, "_make_agent", return_value=agent):
+        llm = fake_llm(final_answer(weakness(self.game.pk)))
+        with mock.patch.object(diagnosis_service, "_make_llm", return_value=llm):
             self.client.post(reverse("create_report"), self.choose(self.game))
-        self.assertEqual({r.game_id for r in agent.records}, {self.game.pk})
+        self.assertIn("Analysed: 1 games, 2 of their moves.", str(llm.prompts[0]))
         self.assertNotIn(other, WeaknessReport.objects.get().games.all())
 
     def test_choosing_no_games_gives_a_message_and_no_report(self):
@@ -223,11 +203,12 @@ class DeleteGameTests(CoachingTestBase):
         self.assertTrue(Game.objects.filter(pk=self.game.pk).exists())
 
 
-@override_settings(TASKS=IMMEDIATE_TASKS, ANTHROPIC_API_KEY="test-key")
+@override_settings(TASKS=IMMEDIATE_TASKS, AI_API_KEY="test-key")
 class PracticeTests(CoachingTestBase):
     def setUp(self):
         super().setUp()
-        with mock.patch.object(diagnosis_service, "_make_agent", return_value=FakeAgent()):
+        llm = fake_llm(final_answer(weakness(self.game.pk)))
+        with mock.patch.object(diagnosis_service, "_make_llm", return_value=llm):
             self.client.post(reverse("create_report"), self.choose())
         self.report = WeaknessReport.objects.get()
 
