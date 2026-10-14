@@ -183,7 +183,7 @@ REST_FRAMEWORK = {
     "PAGE_SIZE": 50,
 }
 
-AI_MODEL = os.getenv("AI_MODEL", "anthropic/claude-opus-5-5")
+AI_MODEL = os.getenv("AI_MODEL", "anthropic/claude-sonnet-5-5")
 AI_API_KEY = os.getenv("AI_API_KEY", "")
 
 os.environ.setdefault("CREWAI_DISABLE_TELEMETRY", "true")
