@@ -1,7 +1,7 @@
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.http import Http404, JsonResponse
+from django.http import Http404
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
@@ -98,21 +98,6 @@ def analyse_all(request):
     else:
         messages.info(request, "All your games are already analysed or waiting.")
     return redirect("game_list")
-
-
-@login_required
-def queue_status(request):
-    # Small JSON endpoint the games list polls while games are being analysed.
-    return JsonResponse({"in_progress": game_service.count_in_progress(request.user)})
-
-
-@login_required
-def game_status(request, game_id):
-    # Small JSON endpoint the game page polls while an analysis is running.
-    game = game_service.get_game(request.user, game_id)
-    if game is None:
-        raise Http404("Game not found")
-    return JsonResponse({"status": game.status, "label": game.get_status_display()})
 
 
 @login_required

@@ -44,6 +44,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django_tasks_db',
+    'rest_framework',
+    'rest_framework.authtoken',
     'apps.accounts',
     'apps.games',
     'apps.coaching',
@@ -167,5 +169,19 @@ TASKS = {
         "QUEUES": ["default"],
     }
 }
+
+# JSON API (Django REST Framework): other programs send "Authorization: Token <key>",
+# the browser uses its login session. Every endpoint needs a logged-in user.
+# Token comes first so that a request without login gets "401 Unauthorized".
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework.authentication.TokenAuthentication",
+        "rest_framework.authentication.SessionAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 50,
+}
+
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-haiku-5-5")
+ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-opus-5-5")

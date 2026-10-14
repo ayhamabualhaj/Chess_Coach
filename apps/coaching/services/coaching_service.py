@@ -50,6 +50,20 @@ def set_practice_done(user, report_id: int, index: int, done: bool) -> bool:
     report_repository.set_task_done(plan, index, done)
     return True
 
+def list_reports(user):
+    return report_repository.list_reports_for_user(user)
+
+
+def get_report_with_plan(user, report_id: int) -> dict | None:
+    """A report and its practice plan, or None if the user has no such report."""
+    report = report_repository.get_report_for_user(user, report_id)
+    if report is None:
+        return None
+    return {"report": report, "plan": report_repository.get_training_plan(report)}
+
+
+
+
 def get_report(user, report_id: int) -> WeaknessReport | None:
     return report_repository.get_report_for_user(user, report_id)
 

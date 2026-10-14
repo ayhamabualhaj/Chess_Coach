@@ -1,6 +1,6 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.http import Http404, JsonResponse
+from django.http import Http404
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
@@ -33,14 +33,6 @@ def report_detail(request, report_id):
     if detail is None:
         raise Http404("Report not found")
     return render(request, "coaching/report_detail.html", detail)
-
-
-@login_required
-def report_status(request, report_id):
-    report = coaching_service.get_report(request.user, report_id)
-    if report is None:
-        raise Http404("Report not found")
-    return JsonResponse({"status": report.status, "label": report.get_status_display()})
 
 
 @login_required

@@ -44,6 +44,11 @@ def list_games(user, show: str = "all", page: int | str = 1) -> dict:
         "max_queue": settings.MAX_ANALYSIS_QUEUE,
     }
 
+def filter_games(user, show: str = "all"):
+    """The user's games for one filter (all / todo / done / side), newest first."""
+    if show not in game_repository.GAME_FILTERS:
+        show = "all"
+    return game_repository.list_games_for_user(user, show)
 
 def get_game(user, game_id: int):
     return game_repository.get_game_for_user(user, game_id)
@@ -125,6 +130,16 @@ def get_game_detail(user, game_id: int) -> dict | None:
         "chart": _chart_data(moves),
         "has_labels": any(move.label for move in moves),
     }
+
+
+def get_game_analysis(user, game_id: int) -> dict | None:
+    """A game with its moves (and their mistakes) and the accuracy of both sides."""
+    game = game_repository.get_game_for_user(user, game_id)
+    if game is None:
+        return None
+    moves = list(game_repository.list_moves_with_mistakes(game))
+    return {"game": game, "moves": moves, "accuracy": _accuracy(moves)}
+
 
 
 def _mistake_of(move):
