@@ -6,6 +6,7 @@ from pydantic import ValidationError
 
 from ai.tools.crew_tools import CoachData, make_tools
 
+from .evidence import KnownMoves
 from .schemas import Diagnosis
 
 MAX_ITER = 8
@@ -28,6 +29,7 @@ class DiagnosisCrew:
         self.data = data
         self.llm = llm
         self.verbose = verbose
+        self.known_moves = KnownMoves.from_records(data.records)
 
     def check_diagnosis(self, output: TaskOutput) -> tuple[bool, Any]:
         try:
@@ -40,6 +42,13 @@ class DiagnosisCrew:
                 return self.reject(
                     f"Weakness '{weakness.title}' cites games that are not in the data: "
                     f"{sorted(unknown)}. Only use game ids returned by the tools."
+                )
+            invented = self.known_moves.unknown_moves(weakness.evidence)
+            if invented:
+                return self.reject(
+                    f"Weakness '{weakness.title}' cites moves that are not in the player's data: "
+                    f"{', '.join(invented)}. Cite only the player's own moves with their move number "
+                    f"(e.g. '40. Kxf5') and the best moves, exactly as get_worst_moves returns them."
                 )
         output.pydantic = diagnosis
         return True, output

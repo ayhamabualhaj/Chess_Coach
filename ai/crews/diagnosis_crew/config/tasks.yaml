@@ -15,6 +15,10 @@ diagnose_task:
     - Back every weakness with evidence from the tool results: numbers and concrete moves
       with their game ids. Use the moves exactly as the tools give them (e.g. best_move
       "Bxf7"); never convert or invent moves, games or statistics.
+    - In the evidence, cite only the player's own moves, with their move number as
+      get_worst_moves gives them (e.g. "40. Kxf5"), and the engine's best moves (e.g.
+      "best was Rxf6"). Do not quote opening sequences or the opponent's moves: every
+      move you cite is checked against the player's data.
     - get_mistake_summary also counts move types (brilliant, great, best, ...). In the
       summary, name one real strength when these numbers show one.
 

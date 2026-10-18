@@ -29,7 +29,6 @@ class ToolCall:
 
 
 @dataclass
-@dataclass
 class CoachData:
     records: list[MoveRecord]
     calls: list[ToolCall] = field(default_factory=list)

@@ -24,10 +24,11 @@ def use_tool(name: str, **args) -> str:
     return f"Thought: I need more data\nAction: {name}\nAction Input: {json.dumps(args)}"
 
 
-def weakness(game_id: int, title: str = "Hanging pieces", priority: int = 1) -> dict:
+def weakness(game_id: int, title: str = "Hanging pieces", priority: int = 1,
+             evidence: str = "2. Qg4 lost the queen.") -> dict:
     return {
         "title": title, "category": "tactics",
-        "explanation": "Pieces are left undefended.", "evidence": "2. Qg4 lost the queen.",
+        "explanation": "Pieces are left undefended.", "evidence": evidence,
         "example_game_ids": [game_id], "priority": priority,
         "how_to_improve": "Check every attacked piece before you move.",
         "exercises": ["10 hanging-piece puzzles a day"],
