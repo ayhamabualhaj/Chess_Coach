@@ -98,7 +98,7 @@ Opened in the browser while logged in, the same URLs show Django REST Framework'
 
 | Area | Technology |
 |---|---|
-| Language | Python 3.10–3.13 (CrewAI does not support 3.14 yet; developed on 3.13) |
+| Language | Python 3.12–3.13 (Django 6.1 needs 3.12+, CrewAI does not support 3.14 yet; developed on 3.13) |
 | Web framework | Django 6.1 (server-rendered templates) |
 | REST API | Django REST Framework 3.18 (serializers, token authentication) |
 | Database | PostgreSQL (driver `psycopg2-binary`) |
@@ -161,14 +161,14 @@ Chess_Coach/
 
 ## 5. How to Run the Project
 
-**Requirements:** Python 3.10–3.13, PostgreSQL, Stockfish, and (for the AI coach) an API key
+**Requirements:** Python 3.12–3.13, PostgreSQL, Stockfish, and (for the AI coach) an API key
 for the model you choose (by default an Anthropic key).
 
 ### 5.1 Get the code and install the packages
 ```bash
 git clone https://github.com/ayhamabualhaj/Chess_Coach.git
 cd Chess_Coach
-python3.13 -m venv .venv             # any Python 3.10–3.13
+python3.13 -m venv .venv             # Python 3.12 or 3.13
 source .venv/bin/activate            # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
@@ -255,6 +255,7 @@ placeholder value.
 |---|---|---|---|
 | `SECRET_KEY` | yes | long random string | Django's secret for sessions and CSRF (see 5.4) |
 | `DEBUG` | no | `True` / default `False` | `True` only for local development |
+| `ALLOWED_HOSTS` | on a server | `chess.example.com,www.chess.example.com` (default: empty) | comma-separated host names the site answers to; leave empty for local development |
 | `DB_NAME` | yes | `chess_coach` | PostgreSQL database name |
 | `DB_USER` | yes | `chess_user` | PostgreSQL user |
 | `DB_PASSWORD` | yes | — | that user's password |

@@ -31,7 +31,7 @@ SECRET_KEY = os.environ["SECRET_KEY"]
 # .env values are strings, so compare to "True" to get a real boolean.
 DEBUG = os.getenv("DEBUG", "False") == "True"
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [host.strip() for host in os.getenv("ALLOWED_HOSTS", "").split(",") if host.strip()]
 
 
 # Application definition
