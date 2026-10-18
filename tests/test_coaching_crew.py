@@ -113,21 +113,21 @@ class CrewToolTests(unittest.TestCase):
         self.tools["get_opening_breakdown"].run(min_games=1)
         self.assertEqual([c.name for c in self.data.calls], ["get_mistake_summary", "get_opening_breakdown"])
 
-    class EvidenceTests(unittest.TestCase):
-        def setUp(self):
+class EvidenceTests(unittest.TestCase):
+    def setUp(self):
             self.known = KnownMoves.from_records(RECORDS)
 
-        def test_played_moves_and_best_moves_are_accepted(self):
+    def test_played_moves_and_best_moves_are_accepted(self):
             self.assertEqual(self.known.unknown_moves("2. Qg4 lost 940 centipawns (best was exd5)."), [])
             self.assertEqual(self.known.unknown_moves("2.Qg4+ was a blunder; 1. e4 was fine."), [])
 
-        def test_wrong_move_number_or_side_is_rejected(self):
+    def test_wrong_move_number_or_side_is_rejected(self):
             self.assertEqual(self.known.unknown_moves("5. Qg4 lost the queen."), ["5. Qg4"])
             self.assertEqual(self.known.unknown_moves("2... Qg4 lost the queen."), ["2... Qg4"])
 
-        def test_invented_piece_moves_are_rejected(self):
+    def test_invented_piece_moves_are_rejected(self):
             self.assertEqual(self.known.unknown_moves("best was Bxf7+, not Qg4"), ["Bxf7+"])
 
-        def test_numbers_and_squares_are_not_moves(self):
+    def test_numbers_and_squares_are_not_moves(self):
             text = "41 hanging pieces, 25.0 mistakes per 100 moves; the f7 square and the e-file are weak."
             self.assertEqual(self.known.unknown_moves(text), [])
