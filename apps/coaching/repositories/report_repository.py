@@ -1,4 +1,8 @@
+from django.utils import timezone
+
 from apps.coaching.models import TrainingPlan, WeaknessReport
+
+IN_PROGRESS = (WeaknessReport.Status.QUEUED, WeaknessReport.Status.RUNNING)
 
 
 def create_report(user, games) -> WeaknessReport:
@@ -24,15 +28,22 @@ def list_reports_for_user(user):
 
 
 def has_report_in_progress(user) -> bool:
-    return WeaknessReport.objects.filter(
-        user=user, status__in=[WeaknessReport.Status.QUEUED, WeaknessReport.Status.RUNNING]
-    ).exists()
+    return WeaknessReport.objects.filter(user=user, status__in=IN_PROGRESS).exists()
+
+
+def fail_stuck_reports(older_than, message: str, user=None) -> int:
+    """Mark reports waiting or running since before `older_than` as failed; returns how many."""
+    reports = WeaknessReport.objects.filter(status__in=IN_PROGRESS, status_changed_at__lt=older_than)
+    if user is not None:
+        reports = reports.filter(user=user)
+    return reports.update(status=WeaknessReport.Status.FAILED, error=message[:200], status_changed_at=timezone.now())
 
 
 def set_status(report: WeaknessReport, status: str, error: str = "") -> None:
     report.status = status
     report.error = error[:200]
-    report.save(update_fields=["status", "error"])
+    report.status_changed_at = timezone.now()
+    report.save(update_fields=["status", "error", "status_changed_at"])
 
 
 def save_result(report: WeaknessReport, **fields) -> None:
@@ -41,6 +52,7 @@ def save_result(report: WeaknessReport, **fields) -> None:
         setattr(report, name, value)
     report.status = WeaknessReport.Status.DONE
     report.error = ""
+    report.status_changed_at = timezone.now()
     report.save()
 
 

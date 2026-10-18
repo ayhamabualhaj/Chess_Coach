@@ -1,15 +1,33 @@
+from datetime import timedelta
+
+from django.conf import settings
+from django.db import transaction
+from django.utils import timezone
+
+from apps.accounts.repositories import account_repository
 from apps.coaching.models import WeaknessReport
 from apps.coaching.repositories import report_repository
 from apps.coaching.tasks import generate_report_task
 from apps.games.repositories import game_repository
 
 
+STUCK_MESSAGE = "The report stopped before it finished (the worker may have been restarted). Please create a new one."
+
+
 class ReportRequestError(Exception):
     """A new report was refused (no games chosen, games not ready, one already running)."""
 
 
+def recover_stuck_reports(user=None, minutes: int | None = None) -> int:
+    """Mark reports waiting or running longer than STUCK_JOB_MINUTES as failed (all users if user is None)."""
+    minutes = settings.STUCK_JOB_MINUTES if minutes is None else minutes
+    older_than = timezone.now() - timedelta(minutes=minutes)
+    return report_repository.fail_stuck_reports(older_than, STUCK_MESSAGE, user)
+
+
 def get_overview(user) -> dict:
     """Everything the coaching page needs."""
+    recover_stuck_reports(user)
     return {
         "games": game_repository.count_games_by_state(user),
         "ready_games": game_repository.list_games_for_coaching(user),
@@ -34,11 +52,13 @@ def request_report(user, game_ids) -> WeaknessReport:
         raise ReportRequestError(
             "Some chosen games are not ready: they must be analysed and have your side set."
         )
-    if report_repository.has_report_in_progress(user):
-        raise ReportRequestError("A report is already being prepared.")
-
-    report = report_repository.create_report(user, games)
-    generate_report_task.enqueue(report.pk)
+    with transaction.atomic():
+        account_repository.lock_user(user)
+        recover_stuck_reports(user)
+        if report_repository.has_report_in_progress(user):
+            raise ReportRequestError("A report is already being prepared.")
+        report = report_repository.create_report(user, games)
+        generate_report_task.enqueue(report.pk)
     return report
 
 
@@ -65,10 +85,12 @@ def get_report_with_plan(user, report_id: int) -> dict | None:
 
 
 def get_report(user, report_id: int) -> WeaknessReport | None:
+    recover_stuck_reports(user)
     return report_repository.get_report_for_user(user, report_id)
 
 
 def get_report_detail(user, report_id: int) -> dict | None:
+    recover_stuck_reports(user)
     report = report_repository.get_report_for_user(user, report_id)
     if report is None:
         return None

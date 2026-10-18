@@ -60,7 +60,10 @@ class GameStatusAPI(APIView):
     """GET /games/<id>/status/  – the game page asks this every 2 s while an analysis runs."""
 
     def get(self, request, game_id):
-        return Response(GameStatusSerializer(_own_game(request, game_id)).data)
+        game = game_service.get_game_status(request.user, game_id)
+        if game is None:
+            raise Http404("Game not found")
+        return Response(GameStatusSerializer(game).data)
 
 
 class QueueStatusAPI(APIView):

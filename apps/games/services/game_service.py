@@ -1,8 +1,13 @@
+from datetime import timedelta
+
 import chess
 from django.conf import settings
 from django.core.paginator import Paginator
+from django.db import transaction
+from django.utils import timezone
 
 from ai.engine import game_accuracy
+from apps.accounts.repositories import account_repository
 from apps.games.models import Game, Mistake, Move
 from apps.games.repositories import game_repository
 from apps.games.tasks import analyse_game_task
@@ -10,6 +15,8 @@ from apps.games.tasks import analyse_game_task
 # The graph is cut off at +/- 10 pawns so one mate score doesn't flatten everything else.
 CHART_LIMIT_PAWNS = 10
 GAMES_PER_PAGE = 50
+
+STUCK_MESSAGE = "The analysis stopped before it finished (the worker may have been restarted). Please analyse again."
 
 # What request_analysis can answer.
 QUEUED = "queued"
@@ -35,8 +42,16 @@ def _valid_filter(show: str) -> str:
     return show if show in game_repository.GAME_FILTERS else "all"
 
 
+def recover_stuck_games(user=None, minutes: int | None = None) -> int:
+    """Mark analyses waiting or running longer than STUCK_JOB_MINUTES as failed (all users if user is None)."""
+    minutes = settings.STUCK_JOB_MINUTES if minutes is None else minutes
+    older_than = timezone.now() - timedelta(minutes=minutes)
+    return game_repository.fail_stuck_games(older_than, STUCK_MESSAGE, user)
+
+
 def list_games(user, show: str = "all", page: int | str = 1) -> dict:
     """One page of the user's games, optionally filtered (all / todo / done / side)."""
+    recover_stuck_games(user)
     show = _valid_filter(show)
     paginator = Paginator(game_repository.list_games_for_user(user, show), GAMES_PER_PAGE)
     return {
@@ -55,6 +70,12 @@ def filter_games(user, show: str = "all"):
 
 
 def get_game(user, game_id: int):
+    return game_repository.get_game_for_user(user, game_id)
+
+
+def get_game_status(user, game_id: int):
+    """The game for the status check the game page polls, after failing it if it is stuck."""
+    recover_stuck_games(user)
     return game_repository.get_game_for_user(user, game_id)
 
 
@@ -77,6 +98,7 @@ def set_user_color(game: Game, color: str) -> bool:
 
 
 def count_in_progress(user) -> int:
+    recover_stuck_games(user)
     return game_repository.count_in_progress(user)
 
 
@@ -96,11 +118,15 @@ def request_analysis(game: Game) -> str:
     Returns QUEUED, ALREADY_QUEUED, or QUEUE_FULL when the user already has
     MAX_ANALYSIS_QUEUE games waiting (so one user cannot keep the worker busy for hours).
     """
-    if game.status in game_repository.IN_PROGRESS:
-        return ALREADY_QUEUED
-    if queue_space(game.user) == 0:
-        return QUEUE_FULL
-    _enqueue(game)
+    with transaction.atomic():
+        account_repository.lock_user(game.user)
+        recover_stuck_games(game.user)
+        game.refresh_from_db(fields=["status"])
+        if game.status in game_repository.IN_PROGRESS:
+            return ALREADY_QUEUED
+        if queue_space(game.user) == 0:
+            return QUEUE_FULL
+        _enqueue(game)
     return QUEUED
 
 
@@ -109,14 +135,18 @@ def analyse_all(user) -> dict:
 
     Returns {"queued": n, "waiting": games still not queued}.
     """
-    games = game_repository.list_games_to_analyse(user, queue_space(user))
-    for game in games:
-        _enqueue(game)
+    with transaction.atomic():
+        account_repository.lock_user(user)
+        recover_stuck_games(user)
+        games = game_repository.list_games_to_analyse(user, queue_space(user))
+        for game in games:
+            _enqueue(game)
     return {"queued": len(games), "waiting": game_repository.count_games_to_analyse(user)}
 
 
 def get_game_detail(user, game_id: int) -> dict | None:
     """Everything the game page needs, or None if the user has no such game."""
+    recover_stuck_games(user)
     game = game_repository.get_game_for_user(user, game_id)
     if game is None:
         return None
@@ -143,7 +173,6 @@ def get_game_analysis(user, game_id: int) -> dict | None:
         return None
     moves = list(game_repository.list_moves_with_mistakes(game))
     return {"game": game, "moves": moves, "accuracy": _accuracy(moves)}
-
 
 
 def _mistake_of(move):

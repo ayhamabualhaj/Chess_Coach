@@ -161,6 +161,10 @@ STOCKFISH_DEPTH = int(os.getenv("STOCKFISH_DEPTH", "12"))
 # How many games one user may have waiting for analysis at the same time.
 MAX_ANALYSIS_QUEUE = int(os.getenv("MAX_ANALYSIS_QUEUE", "10"))
 
+# An analysis or report still waiting or running after this many minutes is treated as stuck
+# (for example when the worker was stopped) and marked as failed, so it no longer blocks the user.
+STUCK_JOB_MINUTES = int(os.getenv("STUCK_JOB_MINUTES", "30"))
+
 # Background tasks (Django's built-in Tasks framework).
 # Tasks are stored in PostgreSQL and run by: python manage.py db_worker
 TASKS = {

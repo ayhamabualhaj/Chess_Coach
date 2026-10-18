@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 
 class WeaknessReport(models.Model):
@@ -21,6 +22,8 @@ class WeaknessReport(models.Model):
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.QUEUED)
     # Short reason shown to the user when the report fails.
     error = models.CharField(max_length=200, blank=True)
+    # When the status last changed; a report waiting or running for too long is treated as stuck.
+    status_changed_at = models.DateTimeField(default=timezone.now)
 
     # What the report is based on.
     games_count = models.PositiveIntegerField(default=0)

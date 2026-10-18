@@ -1,5 +1,5 @@
 from django.db.models import Count, F, Q
-
+from django.utils import timezone
 from apps.games.models import Game, Move
 
 IN_PROGRESS = (Game.Status.QUEUED, Game.Status.RUNNING)
@@ -74,7 +74,16 @@ def list_moves_with_mistakes(game: Game):
 def set_status(game: Game, status: str, error: str = "") -> None:
     game.status = status
     game.analysis_error = error[:200]
-    game.save(update_fields=["status", "analysis_error"])
+    game.status_changed_at = timezone.now()
+    game.save(update_fields=["status", "analysis_error", "status_changed_at"])
+
+
+def fail_stuck_games(older_than, message: str, user=None) -> int:
+    """Mark games waiting or analysing since before `older_than` as failed; returns how many."""
+    games = Game.objects.filter(status__in=IN_PROGRESS, status_changed_at__lt=older_than)
+    if user is not None:
+        games = games.filter(user=user)
+    return games.update(status=Game.Status.FAILED, analysis_error=message[:200], status_changed_at=timezone.now())
 
 
 def set_user_color(game: Game, color: str) -> None:

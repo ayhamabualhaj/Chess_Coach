@@ -1,6 +1,6 @@
 from django.conf import settings
 from django.db import models
-
+from django.utils import timezone
 
 class Game(models.Model):
     class Status(models.TextChoices):
@@ -33,6 +33,8 @@ class Game(models.Model):
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
     # Short reason shown to the user when the analysis fails.
     analysis_error = models.CharField(max_length=200, blank=True)
+    # When the status last changed; an analysis waiting or running for too long is treated as stuck.
+    status_changed_at = models.DateTimeField(default=timezone.now)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

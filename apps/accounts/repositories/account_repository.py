@@ -16,3 +16,9 @@ def create_profile(user, rating=None, lichess_username: str = "") -> UserProfile
 
 def get_profile(user) -> UserProfile | None:
     return UserProfile.objects.filter(user=user).first()
+
+
+def lock_user(user) -> None:
+    # Inside transaction.atomic(): a second request from the same user waits here until
+    # the first one has finished, so "check, then create" cannot run twice at once.
+    get_user_model().objects.select_for_update().get(pk=user.pk)
