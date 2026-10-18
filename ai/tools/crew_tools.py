@@ -29,9 +29,11 @@ class ToolCall:
 
 
 @dataclass
+@dataclass
 class CoachData:
     records: list[MoveRecord]
     calls: list[ToolCall] = field(default_factory=list)
+    rejections: list[str] = field(default_factory=list)
 
     @property
     def game_ids(self) -> set[int]:

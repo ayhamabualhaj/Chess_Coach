@@ -1,3 +1,4 @@
+import logging
 import time
 from dataclasses import dataclass, field
 
@@ -5,13 +6,36 @@ from crewai.flow.flow import Flow, listen, start
 from pydantic import BaseModel, ConfigDict
 
 from ai.crews.diagnosis_crew import DiagnosisCrew
+from ai.crews.diagnosis_crew.crew import GUARDRAIL_RETRIES
 from ai.tools.crew_tools import CoachData, ToolCall
 from ai.tools.practice_tools import build_practice
 from ai.tools.stats_tools import MoveRecord
 
+logger = logging.getLogger(__name__)
+
+GENERIC_ERROR = "The AI coach could not finish the report. Please try again later."
+GUARDRAIL_ERROR = "The AI coach's answer did not pass the checks, even after retries. Please try again."
+PROVIDER_ERRORS = {
+    "AuthenticationError": "The AI service rejected the API key. Check AI_API_KEY in .env.",
+    "PermissionDeniedError": "The AI service rejected the API key. Check AI_API_KEY in .env.",
+    "NotFoundError": "The AI model was not found. Check AI_MODEL in .env.",
+    "RateLimitError": "The AI service is busy right now. Please try again in a few minutes.",
+}
+
 
 class CoachingError(Exception):
     pass
+
+
+def _user_message(exc: Exception, data: CoachData) -> str:
+    if len(data.rejections) > GUARDRAIL_RETRIES:
+        return GUARDRAIL_ERROR
+    error, depth = exc, 0
+    while error is not None and depth < 10:
+        if type(error).__name__ in PROVIDER_ERRORS:
+            return PROVIDER_ERRORS[type(error).__name__]
+        error, depth = error.__cause__ or error.__context__, depth + 1
+    return GENERIC_ERROR
 
 
 @dataclass
@@ -59,7 +83,8 @@ class CoachingFlow(Flow[CoachingState]):
         try:
             output = DiagnosisCrew(data, self.llm, self.verbose).crew().kickoff(inputs=inputs)
         except Exception as exc:
-            raise CoachingError(f"The AI coach could not finish the report: {exc}") from exc
+            logger.exception("The coaching crew failed (%d guardrail rejections)", len(data.rejections))
+            raise CoachingError(_user_message(exc, data)) from exc
 
         diagnosis = output.pydantic
         usage = output.token_usage

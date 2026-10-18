@@ -30,10 +30,14 @@ LABEL_STYLES = {
 }
 
 
+def _valid_filter(show: str) -> str:
+    """The filter name if it exists (all / todo / done / side), otherwise "all"."""
+    return show if show in game_repository.GAME_FILTERS else "all"
+
+
 def list_games(user, show: str = "all", page: int | str = 1) -> dict:
     """One page of the user's games, optionally filtered (all / todo / done / side)."""
-    if show not in game_repository.GAME_FILTERS:
-        show = "all"
+    show = _valid_filter(show)
     paginator = Paginator(game_repository.list_games_for_user(user, show), GAMES_PER_PAGE)
     return {
         "page": paginator.get_page(page),
@@ -44,11 +48,11 @@ def list_games(user, show: str = "all", page: int | str = 1) -> dict:
         "max_queue": settings.MAX_ANALYSIS_QUEUE,
     }
 
+
 def filter_games(user, show: str = "all"):
     """The user's games for one filter (all / todo / done / side), newest first."""
-    if show not in game_repository.GAME_FILTERS:
-        show = "all"
-    return game_repository.list_games_for_user(user, show)
+    return game_repository.list_games_for_user(user, _valid_filter(show))
+
 
 def get_game(user, game_id: int):
     return game_repository.get_game_for_user(user, game_id)

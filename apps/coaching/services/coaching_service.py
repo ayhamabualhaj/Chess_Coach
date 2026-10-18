@@ -4,8 +4,8 @@ from apps.coaching.tasks import generate_report_task
 from apps.games.repositories import game_repository
 
 
-class CoachingError(Exception):
-    pass
+class ReportRequestError(Exception):
+    """A new report was refused (no games chosen, games not ready, one already running)."""
 
 
 def get_overview(user) -> dict:
@@ -21,25 +21,26 @@ def _parse_ids(game_ids) -> set[int]:
     try:
         return {int(game_id) for game_id in game_ids}
     except (TypeError, ValueError):
-        raise CoachingError("Invalid game selection.")
+        raise ReportRequestError("Invalid game selection.")
 
 
 def request_report(user, game_ids) -> WeaknessReport:
     """Queue a new report (weaknesses + training plan) for the chosen games."""
     chosen = _parse_ids(game_ids)
     if not chosen:
-        raise CoachingError("Choose at least one game for the coach to study.")
+        raise ReportRequestError("Choose at least one game for the coach to study.")
     games = list(game_repository.get_ready_games(user, chosen))
     if len(games) != len(chosen):
-        raise CoachingError(
+        raise ReportRequestError(
             "Some chosen games are not ready: they must be analysed and have your side set."
         )
     if report_repository.has_report_in_progress(user):
-        raise CoachingError("A report is already being prepared.")
+        raise ReportRequestError("A report is already being prepared.")
 
     report = report_repository.create_report(user, games)
     generate_report_task.enqueue(report.pk)
     return report
+
 
 def set_practice_done(user, report_id: int, index: int, done: bool) -> bool:
     """Tick a practice item on or off. Returns False if there is no such item."""
@@ -49,6 +50,7 @@ def set_practice_done(user, report_id: int, index: int, done: bool) -> bool:
         return False
     report_repository.set_task_done(plan, index, done)
     return True
+
 
 def list_reports(user):
     return report_repository.list_reports_for_user(user)
@@ -60,8 +62,6 @@ def get_report_with_plan(user, report_id: int) -> dict | None:
     if report is None:
         return None
     return {"report": report, "plan": report_repository.get_training_plan(report)}
-
-
 
 
 def get_report(user, report_id: int) -> WeaknessReport | None:

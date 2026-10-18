@@ -90,12 +90,14 @@ class ReportFlowTests(CoachingTestBase):
         self.assertContains(response, "3 × Hanging pieces puzzles")
 
     def test_agent_error_is_shown_on_the_report(self):
-        llm = fake_llm(RuntimeError("The AI service is overloaded."))
+        llm = fake_llm(RuntimeError("upstream overloaded, request id 123"))
         with mock.patch.object(diagnosis_service, "_make_llm", return_value=llm):
-            response = self.client.post(reverse("create_report"), self.choose(), follow=True)
+            with self.assertLogs("ai.flows.coaching_flow", level="ERROR"):
+                response = self.client.post(reverse("create_report"), self.choose(), follow=True)
         self.assertEqual(WeaknessReport.objects.get().status, WeaknessReport.Status.FAILED)
         self.assertEqual(TrainingPlan.objects.count(), 0)
         self.assertContains(response, "could not finish the report")
+        self.assertNotContains(response, "request id 123")
 
     @override_settings(AI_API_KEY="")
     def test_missing_api_key_fails_with_a_clear_message(self):

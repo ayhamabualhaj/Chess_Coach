@@ -19,7 +19,8 @@ class Mistake(models.Model):
     )
     severity = models.CharField(max_length=10, choices=Severity.choices)
     phase = models.CharField(max_length=10, choices=Phase.choices)
-    # Short tag added later by the AI tools, e.g. "hanging_piece".
+    # Tactical reason found during the analysis, by board rules (ai/tools/motif_tools.py)
+    # or Stockfish's mate scores, e.g. "hanging_piece"; empty when no rule fits.
     motif = models.CharField(max_length=50, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

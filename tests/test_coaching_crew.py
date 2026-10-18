@@ -1,6 +1,6 @@
 import unittest
 
-from ai.flows.coaching_flow import CoachingError, run_coaching
+from ai.flows.coaching_flow import GENERIC_ERROR, CoachingError, run_coaching
 from ai.tools.crew_tools import CoachData, make_tools
 from ai.tools.stats_tools import MoveRecord
 from tests.fake_llm import FakeLLM, final_answer, use_tool, weakness
@@ -49,8 +49,9 @@ class CoachingFlowTests(unittest.TestCase):
         self.assertIn("cites games that are not in the data: [99]", str(llm.prompts[-1]))
 
     def test_answer_that_stays_wrong_fails(self):
-        with self.assertRaises(CoachingError):
-            run(final_answer(weakness(99)), final_answer(weakness(99)), final_answer(weakness(99)))
+        with self.assertLogs("ai.flows.coaching_flow", level="ERROR"):
+            with self.assertRaisesRegex(CoachingError, "did not pass the checks"):
+                run(final_answer(weakness(99)), final_answer(weakness(99)), final_answer(weakness(99)))
 
     def test_weaknesses_are_sorted_by_priority(self):
         result, _ = run(final_answer(weakness(7, "Second", priority=2), weakness(7, "First", priority=1)))
@@ -62,9 +63,20 @@ class CoachingFlowTests(unittest.TestCase):
         self.assertTrue(result.tool_calls[0].is_error)
         self.assertIn("Invalid position or move", str(llm.prompts[-1]))
 
-    def test_ai_error_becomes_a_coaching_error(self):
-        with self.assertRaisesRegex(CoachingError, "could not finish the report"):
-            run(RuntimeError("overloaded"))
+    def test_ai_error_is_logged_and_the_user_gets_a_short_message(self):
+        with self.assertLogs("ai.flows.coaching_flow", level="ERROR") as logs:
+            with self.assertRaises(CoachingError) as caught:
+                run(RuntimeError("upstream overloaded, request id 123"))
+        self.assertEqual(str(caught.exception), GENERIC_ERROR)
+        self.assertIn("upstream overloaded", "\n".join(logs.output))
+
+    def test_provider_errors_get_a_clear_message(self):
+        class AuthenticationError(Exception):
+            pass
+
+        with self.assertLogs("ai.flows.coaching_flow", level="ERROR"):
+            with self.assertRaisesRegex(CoachingError, "rejected the API key"):
+                run(AuthenticationError("invalid x-api-key"))
 
     def test_no_moves_does_not_call_the_model(self):
         llm = FakeLLM(model="fake/coach", replies=[])

@@ -33,16 +33,20 @@ class DiagnosisCrew:
         try:
             diagnosis = parse_diagnosis(output)
         except ValidationError as exc:
-            return False, f"The answer does not match the required structure: {exc}"
+            return self.reject(f"The answer does not match the required structure: {exc}")
         for weakness in diagnosis.weaknesses:
             unknown = set(weakness.example_game_ids) - self.data.game_ids
             if unknown:
-                return False, (
+                return self.reject(
                     f"Weakness '{weakness.title}' cites games that are not in the data: "
                     f"{sorted(unknown)}. Only use game ids returned by the tools."
                 )
         output.pydantic = diagnosis
         return True, output
+
+    def reject(self, reason: str) -> tuple[bool, str]:
+        self.data.rejections.append(reason)
+        return False, reason
 
     @agent
     def chess_coach(self) -> Agent:

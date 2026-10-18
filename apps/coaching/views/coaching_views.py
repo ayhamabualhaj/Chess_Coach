@@ -6,7 +6,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from apps.coaching.services import coaching_service
-from apps.coaching.services.coaching_service import CoachingError
+from apps.coaching.services.coaching_service import ReportRequestError
 
 
 @login_required
@@ -20,7 +20,7 @@ def coaching_home(request):
 def create_report(request):
     try:
         report = coaching_service.request_report(request.user, request.POST.getlist("games"))
-    except CoachingError as e:
+    except ReportRequestError as e:
         messages.error(request, str(e))
         return redirect("coaching_home")
     messages.info(request, "The AI coach is studying your games. This page updates by itself.")
