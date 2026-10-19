@@ -35,18 +35,19 @@ class KnownMoves:
                 any_move.add(_plain(best))
         return cls(played, any_move)
 
-    def unknown_moves(self, evidence: str) -> list[str]:
-        unknown = []
+    def cited_moves(self, evidence: str) -> list[tuple[str, bool]]:
+        cited = []
         numbered_spans = []
         for match in NUMBERED_MOVE.finditer(evidence):
             numbered_spans.append(match.span(3))
             number, dots, san = int(match.group(1)), match.group(2), match.group(3)
             color = "white" if dots == "." else "black"
-            if (number, color, _plain(san)) not in self.played:
-                unknown.append(match.group(0).strip())
+            cited.append((match.group(0).strip(), (number, color, _plain(san)) in self.played))
         for match in PIECE_MOVE.finditer(evidence):
             if any(start <= match.start(1) < end for start, end in numbered_spans):
                 continue
-            if _plain(match.group(1)) not in self.any_move:
-                unknown.append(match.group(1))
-        return list(dict.fromkeys(unknown))
+            cited.append((match.group(1), _plain(match.group(1)) in self.any_move))
+        return cited
+
+    def unknown_moves(self, evidence: str) -> list[str]:
+        return list(dict.fromkeys(move for move, known in self.cited_moves(evidence) if not known))

@@ -22,3 +22,7 @@ def lock_user(user) -> None:
     # Inside transaction.atomic(): a second request from the same user waits here until
     # the first one has finished, so "check, then create" cannot run twice at once.
     get_user_model().objects.select_for_update().get(pk=user.pk)
+
+
+def get_user_by_username(username: str):
+    return get_user_model().objects.filter(username=username).first()

@@ -1,0 +1,12 @@
+Coach evaluation: 5 runs with claude-sonnet-5-5 on the same 5 games (135 moves)
+  Success : 5/5 runs ended with an accepted report
+  Latency : mean 17.72 s, median 18.47 s, max 19.64 s per report
+  Tokens  : mean 8188.0 input and 1953.0 output per report, 2.0 model requests and 3.0 tool calls
+  Cost    : mean $0.0359 per report, $0.1795 in total
+  Guardrail: 0 rejections in 0 of 5 runs (structure 0, unknown games 0, invented moves 0); each rejection is one retry
+  Grounding: 104/104 cited moves are in the player's data (100.0%); 15/15 weaknesses cite at least one move; 3.0 weaknesses per report
+
+Manual rubric: score each weakness in the rubric CSV from 1 (poor) to 5 (excellent):
+  relevant = it matters for this player's results
+  specific = it points to concrete positions, moves or habits, not general advice
+  correct  = the explanation and the evidence agree with the games

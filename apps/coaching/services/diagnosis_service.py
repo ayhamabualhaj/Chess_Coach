@@ -65,6 +65,26 @@ def build_move_records(user, games=None) -> list[MoveRecord]:
     return records
 
 
+def player_info(user) -> dict:
+    profile = account_repository.get_profile(user)
+    return {"name": user.username, "rating": profile.rating if profile else None}
+
+
+def evaluation_inputs(username: str, game_count: int) -> dict | None:
+    """What the coach evaluation needs: the user's latest ready games as MoveRecords,
+    the player and a function that makes a new LLM for each run. None if there is no such user."""
+    user = account_repository.get_user_by_username(username)
+    if user is None:
+        return None
+    games = list(game_repository.list_latest_games_for_coaching(user, game_count))
+    return {
+        "games": len(games),
+        "records": build_move_records(user, games),
+        "player": player_info(user),
+        "make_llm": _make_llm,
+    }
+
+
 def run_report(report_id: int) -> None:
     report = report_repository.get_report(report_id)
     report_repository.set_status(report, WeaknessReport.Status.RUNNING)
@@ -81,11 +101,9 @@ def run_report(report_id: int) -> None:
             report, WeaknessReport.Status.FAILED, "None of the chosen games has analysed moves."
         )
         return
-    profile = account_repository.get_profile(report.user)
-    player = {"name": report.user.username, "rating": profile.rating if profile else None}
 
     try:
-        result = run_coaching(records, _make_llm(), player=player)
+        result = run_coaching(records, _make_llm(), player=player_info(report.user))
     except CoachingError as e:
         report_repository.set_status(report, WeaknessReport.Status.FAILED, str(e))
         return

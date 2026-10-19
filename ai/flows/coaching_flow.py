@@ -24,7 +24,9 @@ PROVIDER_ERRORS = {
 
 
 class CoachingError(Exception):
-    pass
+    def __init__(self, message: str, rejections: list[str] | None = None):
+        super().__init__(message)
+        self.rejections = rejections or []
 
 
 def _user_message(exc: Exception, data: CoachData) -> str:
@@ -46,6 +48,7 @@ class CoachingResult:
     turns: int
     practice: list[dict] = field(default_factory=list)
     tool_calls: list[ToolCall] = field(default_factory=list)
+    rejections: list[str] = field(default_factory=list)
     input_tokens: int = 0
     output_tokens: int = 0
     seconds: float = 0.0
@@ -84,7 +87,7 @@ class CoachingFlow(Flow[CoachingState]):
             output = DiagnosisCrew(data, self.llm, self.verbose).crew().kickoff(inputs=inputs)
         except Exception as exc:
             logger.exception("The coaching crew failed (%d guardrail rejections)", len(data.rejections))
-            raise CoachingError(_user_message(exc, data)) from exc
+            raise CoachingError(_user_message(exc, data), data.rejections) from exc
 
         diagnosis = output.pydantic
         usage = output.token_usage
@@ -94,6 +97,7 @@ class CoachingFlow(Flow[CoachingState]):
             model=getattr(self.llm, "model", str(self.llm)),
             turns=usage.successful_requests,
             tool_calls=data.calls,
+            rejections=data.rejections,
             input_tokens=usage.prompt_tokens,
             output_tokens=usage.completion_tokens,
             seconds=time.perf_counter() - started,

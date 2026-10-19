@@ -95,6 +95,10 @@ def list_games_for_coaching(user):
     """Analysed games where we know which side the user played."""
     return Game.objects.filter(user=user, status=Game.Status.DONE).exclude(user_color="")
 
+def list_latest_games_for_coaching(user, count: int):
+    """The user's `count` most recently uploaded games that are ready for coaching."""
+    return list_games_for_coaching(user).order_by("-created_at", "-pk")[:count]
+
 
 def get_ready_games(user, game_ids):
     """The subset of game_ids that belong to the user and are ready for coaching."""
