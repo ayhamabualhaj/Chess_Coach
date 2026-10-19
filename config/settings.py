@@ -165,6 +165,9 @@ MAX_ANALYSIS_QUEUE = int(os.getenv("MAX_ANALYSIS_QUEUE", "10"))
 # (for example when the worker was stopped) and marked as failed, so it no longer blocks the user.
 STUCK_JOB_MINUTES = int(os.getenv("STUCK_JOB_MINUTES", "30"))
 
+# How many AI reports one user may request in 24 hours (each report costs AI tokens).
+MAX_REPORTS_PER_DAY = int(os.getenv("MAX_REPORTS_PER_DAY", "10"))
+
 # Background tasks (Django's built-in Tasks framework).
 # Tasks are stored in PostgreSQL and run by: python manage.py db_worker
 TASKS = {
@@ -193,5 +196,3 @@ AI_API_KEY = os.getenv("AI_API_KEY", "")
 os.environ.setdefault("CREWAI_DISABLE_TELEMETRY", "true")
 os.environ.setdefault("OTEL_SDK_DISABLED", "true")
 
-# How many AI reports one user may request in 24 hours (each report costs AI tokens).
-MAX_REPORTS_PER_DAY = int(os.getenv("MAX_REPORTS_PER_DAY", "10"))
