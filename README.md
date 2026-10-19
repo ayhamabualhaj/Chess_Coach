@@ -41,14 +41,22 @@ Chess_Coach combines a classical chess engine with an agentic AI layer:
    moves with four tools: it asks for statistics, opening results and your worst moves, re-checks
    single positions, decides itself what to look at next, and finishes with a structured report:
    2-4 recurring weaknesses, each with evidence (real moves from your games), how to improve and
-   exercises. The agent cannot invent games: an answer citing an unknown game id is rejected by a
-   guardrail and the agent has to correct it.
+   exercises. The agent cannot invent games or moves: an answer that cites an unknown game id, or a
+   move that was not played in your games (and is not the engine's best move there), is rejected by
+   a guardrail and the agent has to correct it.
 4. **Practice.** For every type of mistake you made, the report links a matching Lichess puzzle
    theme (3 puzzles per mistake), with a tick-off list and a progress bar.
 5. **REST API.** Everything is also available as JSON for other programs (apps, bots, scripts),
    built with Django REST Framework serializers and token authentication.
-6. **Evaluation.** A command measures the analysis against Lichess's own labels
-   (precision / recall / F1) together with latency and memory per game.
+6. **Evaluation.** One command measures the analysis against Lichess's own labels
+   (precision / recall / F1) together with latency and memory per game. A second command
+   measures the AI coach: latency, tokens, cost, guardrail rejections and how many cited moves
+   are real, over several runs on the same games.
+7. **Limits and recovery.** One user can have at most `MAX_ANALYSIS_QUEUE` games waiting for
+   analysis, one report in progress and `MAX_REPORTS_PER_DAY` reports per 24 hours (each report
+   costs AI tokens). These checks lock the user's row, so two quick clicks cannot both pass.
+   An analysis or report that stays waiting or running longer than `STUCK_JOB_MINUTES`
+   (for example after the worker was stopped) is marked as failed, so it never blocks the user.
 
 **AI component — an agent, not a single API call.** The coach is built with **CrewAI**:
 
@@ -57,7 +65,7 @@ Chess_Coach combines a classical chess engine with an agentic AI layer:
 | Flow | `ai/flows/coaching_flow.py` | `check_data` → `diagnose` → `build_practice_list`; only `diagnose` uses the AI model |
 | Crew | `ai/crews/diagnosis_crew/crew.py` | one `chess_coach` agent with 4 tools, at most 8 steps (`max_iter`) |
 | Prompts | `ai/crews/diagnosis_crew/config/agents.yaml`, `tasks.yaml` | who the agent is (role, goal, backstory) and what it must do — kept out of the Python code |
-| Output check | `ai/crews/diagnosis_crew/schemas.py` + guardrail | the answer must match the `Diagnosis` structure and cite only games that exist; otherwise it is sent back to the agent (at most 2 retries) |
+| Output check | `schemas.py`, `evidence.py` + guardrail in `crew.py` | the answer must match the `Diagnosis` structure and cite only games and moves that exist in the data; otherwise it is sent back to the agent with the reason (at most 2 retries) |
 | Tools | `ai/tools/crew_tools.py` | `get_mistake_summary`, `get_opening_breakdown`, `get_worst_moves`, `explain_position` — thin wrappers around plain Python functions, so every number in a report comes from code, not from the model |
 
 The model is chosen in `.env` (`AI_MODEL`), so the coach can run on Claude or on another
@@ -83,7 +91,7 @@ the user's own data.
 | `GET /api/games/<id>/` | one game with every move, its labels (Best, Blunder…) and both players' accuracy |
 | `POST /api/games/<id>/analyse/` | queue the analysis (`202` queued, `409` already queued, `429` queue full) |
 | `GET /api/reports/` | your coaching reports |
-| `POST /api/reports/` with `{"games": [1, 2]}` | ask the AI coach for a new report (`202`) |
+| `POST /api/reports/` with `{"games": [1, 2]}` | ask the AI coach for a new report (`202` queued, `400` games not ready or a report already running, `429` daily limit reached) |
 | `GET /api/reports/<id>/` | a full report: weaknesses, advice, practice list, tokens and time |
 | `GET /games/<id>/status/`, `/games/queue/`, `/coaching/reports/<id>/status/` | status checks the pages use to refresh themselves |
 
@@ -105,11 +113,11 @@ Opened in the browser while logged in, the same URLs show Django REST Framework'
 | Background jobs | Django's built-in Tasks framework + `django-tasks-db` (worker: `python manage.py db_worker`) |
 | Chess engine | Stockfish (separate program, tested with versions 16 and 18) |
 | Chess logic | `chess` (python-chess): PGN parsing, board rules, UCI engine communication |
-| AI agent | CrewAI 1.15 (crew, flow, tools, YAML prompts, guardrail) with LiteLLM |
+| AI agent | CrewAI 1.15 (crew, flow, tools, YAML prompts, guardrail) with LiteLLM; the `anthropic` package is needed by CrewAI's built-in Claude client (without it, `anthropic/...` models fail to load) |
 | AI model | Claude Sonnet 5.5 by default (any `provider/model` in `AI_MODEL`, e.g. Claude Haiku 5.5 or Opus 5.5) |
 | Front end | Bootstrap 5.3 (dark theme), Chart.js 4.4 for the evaluation graph |
 | Configuration | `python-dotenv` (`.env` file) |
-| Tests | Django test runner / `unittest` (209 tests) |
+| Tests | Django test runner / `unittest` (240 tests) |
 
 **Architecture.** Each request goes **View → Service → Repository / AI → Database**:
 views only handle the request and response, services contain the logic, repositories are the
@@ -142,21 +150,25 @@ Chess_Coach/
 │       ├── serializers/         # report_serializers.py
 │       ├── views/               # coaching_views.py (pages), coaching_api_views.py (JSON API)
 │       ├── repositories/  urls.py  api_urls.py  tasks.py
+│       └── management/commands/ # recover_stuck_jobs, evaluate_coach
 ├── ai/                          # pure Python: no Django, no database
 │   ├── engine/                  # stockfish_wrapper, move_classifier (Lichess rules),
 │   │                            # move_types (Brilliant…Blunder), accuracy
 │   ├── tools/                   # motif_tools, stats_tools, practice_tools,
 │   │                            # crew_tools (the agent's 4 CrewAI tools)
-│   ├── crews/diagnosis_crew/    # crew.py, schemas.py
+│   ├── crews/diagnosis_crew/    # crew.py (agent, task, guardrail), schemas.py,
+│   │                            # evidence.py (checks the moves cited as evidence)
 │   │   └── config/              # agents.yaml, tasks.yaml (the prompts)
 │   └── flows/coaching_flow.py   # check data → diagnose (crew) → practice list
-├── evaluation/                  # performance measurement (accuracy, latency, memory)
+├── evaluation/                  # performance measurement
 │   ├── measure_accuracy.py  measure_latency.py  measure_memory.py  run_evaluation.py
+│   ├── measure_coaching.py      # the AI coach: latency, tokens, cost, guardrail, grounding
 │   └── data/games.pgn           # 10 Lichess-analysed test games
 ├── templates/                   # HTML (base, accounts, games, coaching)
 ├── static/css/style.css
-├── docs/                        # evaluation results (CSV + summary) and the performance report
-└── tests/                       # 209 tests (fake_llm.py: a fake AI model for the tests)
+├── docs/                        # evaluation results (CSV + summary), coach evaluation
+│                                # and rubric, the performance report (.docx and .pdf)
+└── tests/                       # 240 tests (fake_llm.py: a fake AI model for the tests)
 ```
 
 ## 5. How to Run the Project
@@ -220,12 +232,16 @@ python manage.py runserver
 # Terminal 2 — the background worker (runs Stockfish analyses and AI reports)
 python manage.py db_worker
 ```
+If the worker was stopped while jobs were running, mark them as failed right away with
+`python manage.py recover_stuck_jobs --minutes 0` (otherwise this happens by itself after
+`STUCK_JOB_MINUTES`).
+
 Open http://127.0.0.1:8000, sign up (enter your Lichess name so your side is detected),
 upload games, click **Analyse**, then go to **Coaching**.
 
 ### 5.7 Run the tests
 ```bash
-python manage.py test tests          # 209 tests; Stockfish tests are skipped if it isn't installed
+python manage.py test tests          # 240 tests; Stockfish tests are skipped if it isn't installed
 ```
 The tests never call a real AI model: the crew and flow run with a fake model
 (`tests/fake_llm.py`), so the tests need no API key and cost nothing.
@@ -233,6 +249,7 @@ The tests never call a real AI model: the crew and flow run with a fake model
 ### 5.8 Useful commands
 ```bash
 python manage.py analyse_game <game_id> [--depth N]      # analyse one stored game in the terminal
+python manage.py recover_stuck_jobs [--minutes N]        # mark analyses / reports stuck longer than N minutes as failed
 
 # Performance evaluation (accuracy vs Lichess, latency, memory per game):
 python manage.py evaluate evaluation/data/games.pgn --depths 12 18
@@ -241,8 +258,21 @@ python manage.py evaluate evaluation/data/games.pgn --depths 12 18
 #   --limit N          only the first N games
 #   --out FILE         results CSV (default docs/evaluation_results.csv, summary next to it as .txt)
 ```
-Results of our run (10 games, Stockfish 18): `docs/evaluation_results.csv` / `.txt`,
-explained in the performance report `docs/Chess_Coach_Performance_Report.docx`.
+Results of our run (10 games, Stockfish 18): `docs/evaluation_results.csv` / `.txt`.
+
+```bash
+# AI coach evaluation (uses the real AI model, so it costs money: about $0.04 per run with Sonnet):
+python manage.py evaluate_coach <username> --runs 5 --games 5
+#   runs the coach N times on the user's latest ready games; does not save reports
+#   --out FILE         results CSV (default docs/coach_evaluation.csv; summary .txt and
+#                      rubric CSV, one row per weakness, are written next to it)
+```
+Results of our run (5 runs, Claude Sonnet 5.5): `docs/coach_evaluation.csv` / `.txt` and the
+rubric `docs/coach_evaluation_rubric.csv`.
+
+Both evaluations are explained in the performance report:
+[`docs/Chess_Coach_Performance_Report.pdf`](docs/Chess_Coach_Performance_Report.pdf)
+(editable version: `docs/Chess_Coach_Performance_Report.docx`).
 
 ## 6. Environment Variables / Secrets
 
@@ -264,6 +294,8 @@ placeholder value.
 | `STOCKFISH_PATH` | yes* | `/usr/bin/stockfish` (default) | path to the Stockfish program (see 5.2) |
 | `STOCKFISH_DEPTH` | no | `12` | search depth per position; higher = stronger but slower |
 | `MAX_ANALYSIS_QUEUE` | no | `10` | how many games one user may have waiting for analysis at once |
+| `MAX_REPORTS_PER_DAY` | no | `10` | how many AI reports one user may request in 24 hours (web page and API) |
+| `STUCK_JOB_MINUTES` | no | `30` | an analysis or report still waiting or running after this many minutes is marked as failed |
 | `AI_MODEL` | no | `anthropic/claude-sonnet-5-5` (default) | the coach's model as `provider/model`, e.g. `anthropic/claude-haiku-5-5`, `anthropic/claude-opus-5-5`, `openai/gpt-4o-mini` |
 | `AI_API_KEY` | for coaching | `sk-ant-...` | the API key for that provider (Anthropic: https://console.anthropic.com); without it everything works except AI reports |
 
@@ -271,7 +303,9 @@ placeholder value.
 
 CrewAI's anonymous usage data (telemetry) is switched off in `config/settings.py`.
 
-**Costs.** A report is a few model requests. Measured on a 43-game report (about 12,000 input
-and 3,000 output tokens): about 5 cents with Claude Sonnet 5.5 ($2 / $10 per million input /
-output tokens), about 10 cents with Claude Opus 5.5 ($4 / $20) and well under one cent with
-Claude Haiku 5.5 ($0.10 / $0.50).
+**Costs.** A report is a few model requests. Measured with `evaluate_coach` (5 reports on 5 games,
+about 8,200 input and 2,000 output tokens each): about 3.6 cents per report with Claude Sonnet 5.5
+($2 / $10 per million input / output tokens). With the same tokens, Claude Opus 5.5 ($4 / $20)
+would cost about 7 cents and Claude Haiku 5.5 ($0.10 / $0.50) about 0.2 cents. The cost grows
+with the number of model requests the agent makes. `MAX_REPORTS_PER_DAY` limits what one user
+can spend.
