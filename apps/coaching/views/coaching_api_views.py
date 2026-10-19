@@ -8,7 +8,7 @@ from apps.coaching.serializers import (
     CreateReportSerializer, ReportDetailSerializer, ReportSerializer, ReportStatusSerializer,
 )
 from apps.coaching.services import coaching_service
-from apps.coaching.services.coaching_service import ReportRequestError
+from apps.coaching.services.coaching_service import ReportLimitError, ReportRequestError
 
 
 class ReportListAPI(generics.ListCreateAPIView):
@@ -26,6 +26,8 @@ class ReportListAPI(generics.ListCreateAPIView):
         incoming.is_valid(raise_exception=True)
         try:
             report = coaching_service.request_report(request.user, incoming.validated_data["games"])
+        except ReportLimitError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_429_TOO_MANY_REQUESTS)
         except ReportRequestError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(ReportSerializer(report).data, status=status.HTTP_202_ACCEPTED)

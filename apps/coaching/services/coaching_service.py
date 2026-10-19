@@ -18,6 +18,10 @@ class ReportRequestError(Exception):
     """A new report was refused (no games chosen, games not ready, one already running)."""
 
 
+class ReportLimitError(ReportRequestError):
+    """A new report was refused because the user reached MAX_REPORTS_PER_DAY."""
+
+
 def recover_stuck_reports(user=None, minutes: int | None = None) -> int:
     """Mark reports waiting or running longer than STUCK_JOB_MINUTES as failed (all users if user is None)."""
     minutes = settings.STUCK_JOB_MINUTES if minutes is None else minutes
@@ -57,6 +61,11 @@ def request_report(user, game_ids) -> WeaknessReport:
         recover_stuck_reports(user)
         if report_repository.has_report_in_progress(user):
             raise ReportRequestError("A report is already being prepared.")
+        since = timezone.now() - timedelta(days=1)
+        if report_repository.count_reports_since(user, since) >= settings.MAX_REPORTS_PER_DAY:
+            raise ReportLimitError(
+                f"Report limit reached ({settings.MAX_REPORTS_PER_DAY} in 24 hours). Please try again later."
+            )
         report = report_repository.create_report(user, games)
         generate_report_task.enqueue(report.pk)
     return report

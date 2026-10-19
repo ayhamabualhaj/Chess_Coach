@@ -192,3 +192,6 @@ AI_API_KEY = os.getenv("AI_API_KEY", "")
 
 os.environ.setdefault("CREWAI_DISABLE_TELEMETRY", "true")
 os.environ.setdefault("OTEL_SDK_DISABLED", "true")
+
+# How many AI reports one user may request in 24 hours (each report costs AI tokens).
+MAX_REPORTS_PER_DAY = int(os.getenv("MAX_REPORTS_PER_DAY", "10"))

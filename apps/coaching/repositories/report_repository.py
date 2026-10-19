@@ -30,6 +30,8 @@ def list_reports_for_user(user):
 def has_report_in_progress(user) -> bool:
     return WeaknessReport.objects.filter(user=user, status__in=IN_PROGRESS).exists()
 
+def count_reports_since(user, since) -> int:
+    return WeaknessReport.objects.filter(user=user, created_at__gte=since).count()
 
 def fail_stuck_reports(older_than, message: str, user=None) -> int:
     """Mark reports waiting or running since before `older_than` as failed; returns how many."""
